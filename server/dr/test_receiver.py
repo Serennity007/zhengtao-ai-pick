@@ -23,3 +23,7 @@ class ReceiverTests(unittest.TestCase):
  def test_secret_symlink_refused(self):
   (self.candidate/'key').symlink_to('/etc/passwd')
   with self.assertRaisesRegex(ValueError,'symlink'):receiver.promote('s1')
+
+ def test_unexpected_secret_file_refused(self):
+  (self.candidate/'private.env').write_text('SECRET')
+  with self.assertRaisesRegex(ValueError,'unexpected_file'):receiver.promote('s1')

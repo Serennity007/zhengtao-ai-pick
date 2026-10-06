@@ -25,6 +25,8 @@ def promote(identifier):
         if not db.execute('SELECT COUNT(*) FROM entries').fetchone()[0]: raise ValueError('empty_snapshot')
     for p in candidate.rglob('*'):
         if p.is_symlink(): raise ValueError('unexpected_symlink')
+        relative=p.relative_to(candidate).as_posix()
+        if relative not in {'public.sqlite', 'manifest.json', 'wechat-images'} and not re.fullmatch(r'wechat-images/[a-f0-9]{64}\.bin',relative): raise ValueError('unexpected_file')
         os.chown(p, -1, ROOT.stat().st_gid)
         p.chmod(0o2750 if p.is_dir() else 0o640)
     os.chown(candidate, -1, ROOT.stat().st_gid)
