@@ -15,7 +15,7 @@ Primary service: `qiaomu-rss-sync.timer` starts a sync 300 seconds after the pre
 ## Validation and fault drills
 
 ```
-node --test server/dr/*.test.*
+node --test server/dr/*.check.*
 python3 -m unittest discover -s server/dr -p 'test_*.py'
 ```
 
