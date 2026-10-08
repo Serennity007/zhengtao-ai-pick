@@ -2,7 +2,7 @@
 import { describe, expect, it, vi, beforeAll } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { initialState } from '../src/model';
-import { deleteGroup, ensureGroup, migrateLibrary, moveSources, personalSources, renameGroup } from '../src/personal-library';
+import { deleteGroup, ensureGroup, groupsInOrder, migrateLibrary, moveSources, personalSources, renameGroup } from '../src/personal-library';
 import { Subscriptions } from '../src/subscriptions';
 import { baseDiscovery, dedupeDiscovery, searchDiscovery, tidingsItems, tidingsSnapshot } from '../src/discovery-library';
 import { importUrl, readImportUrl } from '../src/import-source';
@@ -29,6 +29,18 @@ describe('personal library migration and grouping', () => {
     expect(loaded.settings.markdownFolders).toEqual(['Inbox', 'Notes/one.md']);
   });
   it('rejects future schema instead of silently resetting data', () => { expect(() => initialState({ libraryVersion: 2 })).toThrow(); });
+  it('parses groups with and without the pinned field', () => {
+    const state = initialState({ subscriptionGroups: [{ id: 'g1', name: 'A', order: 0 }, { id: 'g2', name: 'B', order: 1, pinned: true }] });
+    expect(state.subscriptionGroups.find(g => g.id === 'g1')?.pinned).toBeUndefined();
+    expect(state.subscriptionGroups.find(g => g.id === 'g2')?.pinned).toBe(true);
+  });
+  it('keeps pinned groups ordered by order and preserves the flag when reordering', () => {
+    const state = initialState({ subscriptionGroups: [{ id: 'g1', name: 'A', order: 2, pinned: true }, { id: 'g2', name: 'B', order: 0 }, { id: 'g3', name: 'C', order: 1, pinned: true }] });
+    const ordered = groupsInOrder(state).map(g => ({ id: g.id, pinned: g.pinned }));
+    expect(ordered).toEqual([{ id: 'g2', pinned: undefined }, { id: 'g3', pinned: true }, { id: 'g1', pinned: true }]);
+    state.subscriptionGroups[0].pinned = true;
+    expect(groupsInOrder(state)[2].pinned).toBe(true);
+  });
   it('imports 718 sources without network requests or overwriting existing choices', async () => {
     const state = initialState(null), transport = vi.fn(), service = new Subscriptions(() => state, async () => {}, transport);
     const feeds = tidingsItems(tidingsSnapshot).map(f => ({ url: f.url!, name: f.name, group: f.group }));

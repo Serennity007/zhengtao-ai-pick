@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pin subscription groups to the top of the channel picker as independent sections; unpin returns them to My subscriptions. Search breadcrumbs show the pinned group name.
 - Read Atom elements in their own XML namespace so Media RSS attachments cannot replace article text with a filename (including Jant feeds).
 
 ## 0.26.0

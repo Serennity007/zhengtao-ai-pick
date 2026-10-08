@@ -132,6 +132,7 @@ export class LibraryPanel extends Component {
       const groups = groupsInOrder(state), index = groups.findIndex(g => g.id === id), other = groups[index + step];
       menu.addItem(i => i.setTitle(label).setIcon(step < 0 ? 'arrow-up' : 'arrow-down').setDisabled(!other).onClick(async () => { if (other) { await this.plugin.editLibrary(() => { groups.forEach((g, n) => { g.order = n; }); [group.order, other.order] = [other.order, group.order]; }); this.updated(); } }));
     }
+    menu.addItem(i => i.setTitle(group.pinned ? t('library.unpinTop') : t('library.pinTop')).setIcon(group.pinned ? 'pin-off' : 'pin').onClick(async () => { await this.plugin.editLibrary(() => { group.pinned = !group.pinned; }); this.updated(); }));
     menu.addSeparator();
     menu.addItem(i => i.setTitle(t('library.deleteGroup')).setIcon('trash-2').setWarning(true).onClick(() => new ConfirmAction(this.plugin, t('library.deleteGroup'), t('library.deleteGroupDesc'), async () => { await this.plugin.editLibrary(() => deleteGroup(state, id)); this.updated(); }).open()));
     showSubscriptionMenu(menu, anchor);

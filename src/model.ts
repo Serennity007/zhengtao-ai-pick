@@ -54,7 +54,7 @@ export const collectionJobSchema = z.object({ id: z.string(), url: z.string(), b
 export type CollectionJob = z.infer<typeof collectionJobSchema>;
 export const stateSchema = z.object({
   libraryVersion: z.number().int().min(0).max(1).default(0),
-  subscriptionGroups: z.array(z.object({ id: z.string(), name: z.string(), order: z.number() })).default([]),
+  subscriptionGroups: z.array(z.object({ id: z.string(), name: z.string(), order: z.number(), pinned: z.boolean().optional() })).default([]),
   sourceMeta: z.record(z.string(), z.object({ groupId: z.string(), name: z.string().default(''), order: z.number().default(0) })).default({}),
   collapsedGroups: z.array(z.string()).default([]),
   settings: z.object({

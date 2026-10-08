@@ -335,7 +335,7 @@ export class ReaderView extends ItemView {
       { id: '@local', name: t('reader.mySubscriptions'), short: t('reader.allSubscriptions'), section: '聚合', subtitle: t('reader.sourceCount', { n: sources.length }), icon: 'rss' },
       ...(this.plugin.state.settings.labCollection || this.plugin.state.collectionJobs.length ? [{ id: '@collection', name: t('lab.myRequests'), section: '转写入口' as const, subtitle: t('channel.mine'), icon: 'file-audio' }] : []),
       ...(this.plugin.collectionAdminAvailable() ? [{ id: '@collection-all', name: t('lab.userRequests'), section: '转写入口' as const, subtitle: t('channel.mine'), icon: 'users' }] : []),
-      ...groups.map(group => ({ id: `@group:${group.id}`, name: group.name, section: '订阅分组' as const, subtitle: t('reader.sourceCount', { n: sources.filter(s => s.groupId === group.id).length }), icon: 'folder' })),
+      ...groups.map(group => ({ id: `@group:${group.id}`, name: group.name, section: '订阅分组' as const, subtitle: t('reader.sourceCount', { n: sources.filter(s => s.groupId === group.id).length }), icon: 'folder', pinned: group.pinned })),
       ...curatedChannels(this.plugin.state).map(source => ({ id: source.id, name: source.name, section: '乔木频道' as const, subtitle: source.category || '', monogram: source.name.trim().slice(0, 1), divider: qiaomuChannelDivider(source) })),
       ...curatedCommunityChannels(this.plugin.state).map(source => ({ id: source.id, name: source.name, section: '读者社区' as const, subtitle: t('channel.community'), icon: 'users' })),
       ...sources.map(source => ({ id: source.id, name: source.name, section: '我的订阅源' as const, subtitle: source.detail, group: source.groupId, site: source.site, url: source.url, image: source.image, kind: source.kind })),
