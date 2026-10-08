@@ -25,7 +25,8 @@
 | `src/view.ts` | 构造 `ChannelPicker` 时传入 `settings.pinnedGroupIds` |
 | `src/library-view.ts` | 分组菜单新增置顶/取消置顶项（图标 `pin` / `pin-off`） |
 | `src/i18n.ts` | 新增 `library.pinGroup`、`library.unpinGroup` 两行，八语齐全 |
-| `tests/personal-library.test.ts` | 3 条新测试：双向切换、删除分组后不留失效 id、旧状态缺字段时取 schema 默认值 |
+| `tests/personal-library.test.ts` | 3 条测试：双向切换、删除分组后不留失效 id、旧状态缺字段时取 schema 默认值 |
+| `tests/channel-picker.test.ts` | 新增文件，5 条 jsdom 测试直接断言 `.qrs-channel-options` 的子节点序列：置顶分段夹在 读者社区 与 我的订阅 之间、只出现一次、未置顶时顺序与上游完全一致、面包屑只对置顶分组显示分组名、失效 id 被忽略 |
 | `manifest.json` / `package.json` / `versions.json` | 显示名 `Zhengtao AI Pick`、版本 `1.0.0`；**`id` 保持 `qiaomu-ai-rss`** |
 
 `id` 不变是刻意的：这样构建产物可以直接覆盖官方插件所在目录，沿用你已有的 `data.json`（订阅、已读、收藏都不用迁移）。代价是内部 id 仍写着 qiaomu。
