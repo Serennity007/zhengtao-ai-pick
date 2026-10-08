@@ -2,7 +2,7 @@
 import { describe, expect, it, vi, beforeAll } from 'vitest';
 import { webcrypto } from 'node:crypto';
 import { initialState } from '../src/model';
-import { deleteGroup, ensureGroup, migrateLibrary, moveSources, personalSources, renameGroup } from '../src/personal-library';
+import { deleteGroup, ensureGroup, migrateLibrary, moveSources, personalSources, renameGroup, togglePinnedGroup } from '../src/personal-library';
 import { Subscriptions } from '../src/subscriptions';
 import { baseDiscovery, dedupeDiscovery, searchDiscovery, tidingsItems, tidingsSnapshot } from '../src/discovery-library';
 import { importUrl, readImportUrl } from '../src/import-source';
@@ -107,5 +107,27 @@ describe('group aliases and catalog dedupe', () => {
   it('the combined blogs tab has no duplicate feeds', () => {
     const all = baseDiscovery(); const keys = all.map(f => f.url ? new URL(f.url).href.replace(/^http:/, 'https:') : f.id);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('pinning a subscription group as a top-level channel', () => {
+  it('toggles the pin both ways and keeps only unique ids', () => {
+    const state = initialState(); const id = ensureGroup(state, '正涛精选');
+    expect(togglePinnedGroup(state, id)).toBe(true);
+    expect(state.settings.pinnedGroupIds).toEqual([id]);
+    expect(togglePinnedGroup(state, id)).toBe(false);
+    expect(state.settings.pinnedGroupIds).toEqual([]);
+  });
+  it('drops the pin when the group is deleted so no stale id is left behind', () => {
+    const state = initialState(); const id = ensureGroup(state, '正涛精选');
+    togglePinnedGroup(state, id);
+    deleteGroup(state, id);
+    expect(state.subscriptionGroups.some(g => g.id === id)).toBe(false);
+    expect(state.settings.pinnedGroupIds).toEqual([]);
+  });
+  it('survives a state reload with the schema default when the key is absent', () => {
+    const state = initialState({ settings: {} } as never);
+    expect(Array.isArray(state.settings.pinnedGroupIds)).toBe(true);
+    expect(state.settings.pinnedGroupIds).toEqual([]);
   });
 });

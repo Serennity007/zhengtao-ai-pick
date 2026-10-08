@@ -18,7 +18,7 @@ export class ChannelPicker extends Component {
   private backdrop?: HTMLElement;
   private expanded = new Set<string>();
   private finished = false;
-  constructor(private anchor: HTMLElement, private choices: ChannelChoice[], private active: string, private choose: (choice: ChannelChoice) => void, private dismiss: () => void, private icons?: SourceIcons, private groupState?: { collapsed: string[]; save: (id: string, collapsed: boolean) => void }, private manage?: () => void) { super(); }
+  constructor(private anchor: HTMLElement, private choices: ChannelChoice[], private active: string, private choose: (choice: ChannelChoice) => void, private dismiss: () => void, private icons?: SourceIcons, private groupState?: { collapsed: string[]; save: (id: string, collapsed: boolean) => void }, private manage?: () => void, private pinnedGroups: string[] = []) { super(); }
   onload() {
     if (this.icons) this.addChild(this.icons);
     const doc = this.anchor.ownerDocument, win = doc.defaultView!;
@@ -82,12 +82,16 @@ export class ChannelPicker extends Component {
     if (choice.section === '乔木分组') return this.choices.filter(c => c.section === '乔木频道' && c.divider === choice.id.slice(8)).sort(compareChannelNames);
     return [];
   }
+  private isPinned(choice: ChannelChoice) {
+    return choice.section === '订阅分组' && this.pinnedGroups.includes(choice.id.slice(7));
+  }
   private where(choice: ChannelChoice) {
     if (choice.section === '乔木频道') return `${t('channel.featured')} · ${dividerLabel(choice.divider || '')}`;
     if (choice.section === '读者社区') return t('channel.community');
     if (choice.section === '转写入口') return t('channel.mine');
     if (choice.section === '我的订阅源') return `${t('channel.mine')}${choice.group ? ` · ${this.choices.find(c => c.id === `@group:${choice.group}`)?.name ?? ''}` : ''}`;
-    return choice.section === '乔木分组' ? t('channel.featured') : choice.section === '订阅分组' ? t('channel.mine') : '';
+    if (choice.section === '订阅分组') return this.isPinned(choice) ? choice.name : t('channel.mine');
+    return choice.section === '乔木分组' ? t('channel.featured') : '';
   }
   private render() {
     this.icons?.clear(); this.rows.empty();
@@ -124,10 +128,12 @@ export class ChannelPicker extends Component {
     for (const divider of qiaomuDividers) { const group = this.choices.find(c => c.id === `@qiaomu:${divider}`); if (group && this.children(group).length) row(group, 1); }
     const community = this.choices.filter(c => c.section === '读者社区');
     if (community.length) { this.rows.createDiv({ cls: 'qrs-channel-section', text: t('channel.community') }); community.forEach(c => row(c, 1)); }
+    const pinned = this.choices.filter(c => this.isPinned(c));
+    for (const group of pinned) { this.rows.createDiv({ cls: 'qrs-channel-section', text: group.name }); row(group, 1); }
     this.rows.createDiv({ cls: 'qrs-channel-section', text: t('channel.mine') });
     this.choices.filter(c => c.id === '@local').forEach(c => row(c));
     this.choices.filter(c => c.section === '转写入口').forEach(c => row(c, 1));
-    this.choices.filter(c => c.section === '订阅分组').forEach(c => row(c, 1));
+    this.choices.filter(c => c.section === '订阅分组' && !this.isPinned(c)).forEach(c => row(c, 1));
     this.choices.filter(c => c.section === '我的订阅源' && !c.group).forEach(c => row(c, 1));
   }
   close(focus = true) {

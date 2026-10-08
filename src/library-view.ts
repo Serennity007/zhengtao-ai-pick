@@ -1,7 +1,7 @@
 import { Component, Menu, Notice, setIcon } from 'obsidian';
 import type QiaomuRssPlugin from './main';
 import { exportOpml } from './feeds';
-import { deleteGroup, ensureGroup, groupsInOrder, moveSources, personalSources, renameGroup, type PersonalSource } from './personal-library';
+import { deleteGroup, ensureGroup, groupsInOrder, moveSources, personalSources, renameGroup, togglePinnedGroup, type PersonalSource } from './personal-library';
 import { SourceIcons } from './source-icons';
 import { addSearchClear } from './search-clear';
 import { addLocalContent, ConfirmAction, GroupChoice, iconButton, OpmlImport, TextPrompt } from './subscription-ui';
@@ -127,6 +127,8 @@ export class LibraryPanel extends Component {
     const state = this.plugin.state, group = state.subscriptionGroups.find(g => g.id === id)!;
     const menu = new Menu();
     menu.addItem(i => i.setTitle(t('library.readGroup')).setIcon('book-open').onClick(() => { void this.plugin.openPersonalSource(`@group:${id}`); }));
+    const pinned = state.settings.pinnedGroupIds.includes(id);
+    menu.addItem(i => i.setTitle(t(pinned ? 'library.unpinGroup' : 'library.pinGroup')).setIcon(pinned ? 'pin-off' : 'pin').onClick(async () => { await this.plugin.editLibrary(() => { togglePinnedGroup(state, id); }); this.updated(); }));
     menu.addItem(i => i.setTitle(t('library.rename')).setIcon('pencil').onClick(() => new TextPrompt(this.plugin, t('library.renameGroup'), group.name, async name => { await this.plugin.editLibrary(() => renameGroup(state, id, name)); this.updated(); }).open()));
     for (const [label, step] of [[t('library.moveUp'), -1], [t('library.moveDown'), 1]] as const) {
       const groups = groupsInOrder(state), index = groups.findIndex(g => g.id === id), other = groups[index + step];

@@ -1,7 +1,7 @@
 {
-  "name": "qiaomu-ai-rss",
-  "version": "0.26.2",
-  "description": "Read Qiaomu and personal RSS feeds, then add article links to your Daily Note.",
+  "name": "zhengtao-ai-pick",
+  "version": "1.0.0",
+  "description": "Zhengtao AI Pick — fork of Qiaomu AI RSS with pinnable top-level subscription groups",
   "license": "GPL-3.0-only",
   "private": true,
   "scripts": {

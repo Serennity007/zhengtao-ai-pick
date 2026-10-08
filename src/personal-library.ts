@@ -14,6 +14,13 @@ export function ensureGroup(state: State, raw: string): string {
 export function registerSource(state: State, id: string, group: string) {
   if (!state.sourceMeta[id]) state.sourceMeta[id] = { groupId: ensureGroup(state, group), name: '', order: Object.keys(state.sourceMeta).length };
 }
+/** Pin a subscription group so the channel picker shows it as its own top-level section instead of nesting it under 我的订阅. */
+export function togglePinnedGroup(state: State, id: string): boolean {
+  const pinned = new Set(state.settings.pinnedGroupIds);
+  if (pinned.has(id)) pinned.delete(id); else pinned.add(id);
+  state.settings.pinnedGroupIds = [...pinned];
+  return pinned.has(id);
+}
 export function migrateLibrary(state: State) {
   for (const feed of state.subscriptions) registerSource(state, feed.id, feed.group);
   for (const id of state.settings.followedPodcasts) registerSource(state, id, '播客');
@@ -75,5 +82,6 @@ export function deleteGroup(state: State, id: string) {
   moveSources(state, personalSources(state).filter(s => s.groupId === id).map(s => s.id), '');
   state.subscriptionGroups = state.subscriptionGroups.filter(g => g.id !== id);
   state.collapsedGroups = state.collapsedGroups.filter(g => g !== id);
+  state.settings.pinnedGroupIds = state.settings.pinnedGroupIds.filter(g => g !== id);
   if (state.settings.lastSource === `@group:${id}`) state.settings.lastSource = '@local';
 }

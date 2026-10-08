@@ -1,6 +1,12 @@
 <img src="docs/images/qiaomu-rss-icon.png" alt="Qiaomu AI RSS" width="80" />
 
-# Qiaomu AI RSS · 乔木 RSS
+# Zhengtao AI Pick · 正涛精选
+
+> **这是 [Qiaomu AI RSS](https://github.com/joeseesun/qiaomu-ai-rss)（乔木 RSS）的 fork**，原作者 [向阳乔木 @joeseesun](https://github.com/joeseesun)，许可证 **GPL-3.0-only**。
+> 本仓库不是独立作品：除下列改动外，代码、文档、字体与第三方目录的著作权均归上游及其各自作者。
+> 基线：上游 `main` @ `f9ebc163`（v0.26.2 之后 9 个提交）。
+>
+> **本 fork 的改动**：订阅分组可以被**置顶为顶层频道**，与「乔木精选 / 读者社区 / 我的订阅」并列，而不是只能嵌在「我的订阅」下面。插件 id 保持 `qiaomu-ai-rss`，因此可以直接覆盖官方插件目录、沿用你已有的 `data.json`。详见 [FORK.md](FORK.md)。
 
 **[在 Obsidian 官方插件库安装 · Install](https://community.obsidian.md/plugins/qiaomu-ai-rss)**
 

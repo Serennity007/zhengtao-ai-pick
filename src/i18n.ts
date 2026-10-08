@@ -417,6 +417,8 @@ export const M = [
   ["library.removeTitle", "取消 {n} 个订阅", "Unsubscribe from {n} source(s)", "取消 {n} 個訂閱", "{n} 件の購読を解除", "구독 {n}개 취소", "Cancelar {n} suscripciones", "Se désabonner de {n} source(s)", "{n} Abonnement(s) abbestellen"],
   ["library.removeDesc", "保留已收藏的文章和笔记。本地文件及文件夹不会被删除。", "Favorited articles and notes are kept. Local files and folders are not deleted.", "保留已收藏的文章和筆記。本機檔案及資料夾不會被刪除。", "お気に入りの記事とノートは保持されます。ローカルのファイルやフォルダーは削除されません。", "즐겨찾기한 글과 노트는 유지됩니다. 로컬 파일과 폴더는 삭제되지 않습니다.", "Se conservan los artículos favoritos y las notas. Los archivos y carpetas locales no se eliminan.", "Les articles favoris et les notes sont conservés. Les fichiers et dossiers locaux ne sont pas supprimés.", "Favorisierte Artikel und Notizen bleiben erhalten. Lokale Dateien und Ordner werden nicht gelöscht."],
   ["library.readGroup", "阅读此分组", "Read this group", "閱讀此分組", "このグループを読む", "이 그룹 읽기", "Leer este grupo", "Lire ce groupe", "Diese Gruppe lesen"],
+  ["library.pinGroup", "置顶为独立频道", "Pin as top-level channel", "置頂為獨立頻道", "独立チャンネルとしてピン留め", "독립 채널로 고정", "Fijar como canal propio", "Épingler comme chaîne autonome", "Als eigener Kanal anheften"],
+  ["library.unpinGroup", "取消置顶", "Unpin from top level", "取消置頂", "ピン留めを解除", "고정 해제", "Quitar de canales fijados", "Désépingler", "Anheftung lösen"],
   ["library.rename", "重命名", "Rename", "重新命名", "名前を変更", "이름 바꾸기", "Renombrar", "Renommer", "Umbenennen"],
   ["library.renameGroup", "重命名分组", "Rename group", "重新命名分組", "グループ名を変更", "그룹 이름 바꾸기", "Renombrar grupo", "Renommer le groupe", "Gruppe umbenennen"],
   ["library.moveUp", "上移", "Move up", "上移", "上へ移動", "위로 이동", "Subir", "Monter", "Nach oben"],
