@@ -1,3 +1,4 @@
+import { PLUGIN_NAME, READER_VIEW_TYPE } from './identity';
 import { curatedChannels, curatedCommunityChannels, filterCuratedEntries, keepCuratedEntry, pickedSources } from './curated-sources';
 import type { CollectionItem } from './collection';
 import { todayLabel } from './daily-note';
@@ -26,7 +27,7 @@ import { dividerLabel, relativeTime, t } from './i18n';
 import { agentAvailable, articleSnapshot, askAgent } from './agent-bridge';
 import { notifyContextChanged, type ContextSnapshot } from './qiaomu-context';
 import { fontName } from './fonts';
-export const VIEW_TYPE = 'qiaomu-ai-rss-reader';
+export const VIEW_TYPE = READER_VIEW_TYPE;
 type Filter = 'all' | 'unread' | 'favorites';
 export class ReaderView extends ItemView {
   private channelPicker?: ChannelPicker;
@@ -58,8 +59,9 @@ export class ReaderView extends ItemView {
     this.restoreObserver.observe(this.list); this.restoreObserver.observe(this.reader);
   }
   private restoreChannel(saved: ChannelState) {
-    this.entries = filterCuratedEntries(this.plugin.state, this.source || this.plugin.state.settings.pickedSourceIds !== null ? saved.entries : qiaomuFeaturedEntries(saved.entries));
-    this.bundle = saved.bundle && (!keepCuratedEntry(this.plugin.state, saved.bundle.entry) || !this.source && this.plugin.state.settings.pickedSourceIds === null && !qiaomuFeaturedEntries([saved.bundle.entry]).length) ? null : saved.bundle;
+    // Feed storage is authoritative: a checkpoint may predate an unsubscribe or a refresh.
+    this.entries = this.personalScope() ? this.localEntries() : filterCuratedEntries(this.plugin.state, this.source || this.plugin.state.settings.pickedSourceIds !== null ? saved.entries : qiaomuFeaturedEntries(saved.entries));
+    this.bundle = saved.bundle && (!this.personalEntryAvailable(saved.bundle.entry) || !keepCuratedEntry(this.plugin.state, saved.bundle.entry) || !this.source && this.plugin.state.settings.pickedSourceIds === null && !qiaomuFeaturedEntries([saved.bundle.entry]).length) ? null : saved.bundle;
     this.mode = saved.mode;
     this.filter = saved.filter; this.query = saved.query; this.unreadSession = new Set(saved.unread);
     this.cursor = saved.cursor; this.hasMore = saved.hasMore; this.lastListTop = saved.listTop; this.lastReaderTop = saved.readerTop;
@@ -115,7 +117,7 @@ export class ReaderView extends ItemView {
     super(leaf); this.mode = plugin.state.settings.defaultMode;
   }
   getViewType() { return VIEW_TYPE; }
-  getDisplayText() { return 'Qiaomu AI RSS'; }
+  getDisplayText() { return PLUGIN_NAME; }
   getIcon() { return 'rss'; }
   onOpen(): Promise<void> {
     this.reset();
@@ -197,7 +199,7 @@ export class ReaderView extends ItemView {
     this.closed = false; this.listVersion++; this.articleVersion++; this.clearThumbnails();
     const remembered = this.plugin.state.settings.lastSource;
     const localExists = this.plugin.state.subscriptions.some(feed => feed.id === remembered);
-    const groupExists = remembered.startsWith('@group:') && this.plugin.state.subscriptions.some(feed => feed.group === remembered.slice(7));
+    const groupExists = remembered.startsWith('@group:') && this.plugin.state.subscriptionGroups.some(group => group.id === remembered.slice(7));
     this.focused = false; this.source = (remembered !== 'levelingup' || this.plugin.state.settings.pickedSourceIds?.includes(remembered)) && (remembered === '@local' || remembered === '@collection' || remembered === '@collection-all' && this.plugin.collectionAdminAvailable() || this.plugin.state.settings.markdownFolders.some(folder => vaultSourceId(folder) === remembered) || groupExists || localExists || this.plugin.state.settings.followedPodcasts.includes(remembered) || (qiaomuDividers as readonly string[]).includes(remembered.replace(/^@qiaomu:/, '')) && remembered.startsWith('@qiaomu:') || curatedChannels(this.plugin.state).some(source => source.id === remembered)) ? remembered : '';
     this.cursor = ''; this.bundle = null; this.loading = false; this.hasMore = false;
     this.mode = this.plugin.state.settings.defaultMode;
@@ -205,7 +207,7 @@ export class ReaderView extends ItemView {
     this.entries = this.personalScope() ? this.localEntries() : this.source ? [] : filterCuratedEntries(this.plugin.state, this.plugin.state.settings.pickedSourceIds === null ? qiaomuFeaturedEntries(this.plugin.state.entries) : this.plugin.state.entries);
     this.build();
     const saved = this.plugin.state.channelStates[this.channelKey()];
-    if (saved) { this.restoreChannel(saved); if (!this.entries.length || !this.source) void this.loadEntries(); }
+    if (saved) { this.restoreChannel(saved); if (this.personalScope() || !this.entries.length || !this.source) void this.loadEntries(); }
     else { this.renderList(); this.renderReader(); void this.loadEntries(); }
   }
   private run(action: () => Promise<void>) {
@@ -341,17 +343,26 @@ export class ReaderView extends ItemView {
       ...sources.map(source => ({ id: source.id, name: source.name, section: '我的订阅源' as const, subtitle: source.detail, group: source.groupId, site: source.site, url: source.url, image: source.image, kind: source.kind })),
     ];
   }
-  refreshPersonalSources() {
+  refreshPersonalSources(removedSourceIds: string[] = []) {
     if (this.closed || !this.channelButton) return;
+    const removed = new Set(removedSourceIds);
+    const available = (entry: Entry) => !removed.has(entry.sourceId) && this.personalEntryAvailable(entry);
+    this.entries = this.entries.filter(available);
+    if (this.bundle && !available(this.bundle.entry)) {
+      ++this.articleVersion; this.bundle = null; this.articleLoading = false; this.message = '';
+      this.contentEl.removeClass('qrs-has-article'); this.reader.setAttribute('aria-busy', 'false'); this.renderReader();
+    }
     if (this.source === '@collection-all' && !this.plugin.collectionAdminAvailable()) { this.collectionItems = []; this.selectSource('@collection'); return; }
     if (this.source === '@collection') {
       const local = this.plugin.collectionLocalItems();
       this.collectionItems = [...new Map([...this.collectionItems, ...local].map(item => [item.id, item])).values()].sort((a,b) => b.createdAt - a.createdAt);
       this.renderList();
     }
-    if (this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source)) { this.selectSource('@local', false); return; }
+    if (removed.has(this.source) || this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source)) { this.selectSource('@local', false, false); return; }
     this.renderChannel(); this.renderFilters();
-    if (this.personalScope()) { this.entries = this.localEntries(); this.renderList(); }
+    if (this.personalScope()) this.entries = this.localEntries();
+    this.renderList();
+    this.saveChannel();
   }
   showPersonalSource(id: string) { this.selectSource(id); }
   private collectionScope() { return this.source === '@collection' || this.source === '@collection-all'; }
@@ -372,6 +383,10 @@ export class ReaderView extends ItemView {
     return new Set(divider ? curatedChannels(this.plugin.state).filter(item => qiaomuChannelDivider(item) === divider).map(item => item.id) : []);
   }
   private personalScope() { return this.source === '@local' || this.source.startsWith('@group:') || this.source.startsWith('local:'); }
+  private personalEntryAvailable(entry: Entry) {
+    return entry.origin === 'local' ? this.plugin.state.subscriptions.some(feed => feed.id === entry.sourceId)
+      : entry.origin !== 'vault' || this.plugin.state.settings.markdownFolders.some(folder => vaultSourceId(folder) === entry.sourceId);
+  }
   private selectedFeeds() {
     return this.plugin.state.subscriptions.filter(feed => this.source === '@local' || feed.id === this.source ||
       (this.source.startsWith('@group:') && this.plugin.state.sourceMeta[feed.id]?.groupId === this.source.slice(7)));
@@ -387,9 +402,9 @@ export class ReaderView extends ItemView {
     this.channelPicker = new ChannelPicker(this.channelButton, this.channelChoices(), this.source, source => this.selectSource(source.id), () => { this.channelPicker = undefined; }, new SourceIcons(this.plugin), { collapsed: this.plugin.state.collapsedGroups, save: (id, collapsed) => { void this.plugin.editLibrary(() => { const state = this.plugin.state; state.collapsedGroups = collapsed ? [...new Set([...state.collapsedGroups, id])] : state.collapsedGroups.filter(g => g !== id); }).catch(() => new Notice(t('notice.groupStateSaveFailed'))); } }, () => this.plugin.manageSubscriptions(), this.plugin.state.settings.pinnedGroupIds);
     this.channelPicker.load();
   }
-  private selectSource(source: string, refresh = true) {
+  private selectSource(source: string, refresh = true, savePrevious = true) {
     if (source === this.source) { if (!refresh) void this.loadEntries(); return; }
-    this.saveChannel(); this.stopRestoring();
+    if (savePrevious) this.saveChannel(); this.stopRestoring();
     this.unreadSession.clear();
     this.listVersion++; this.loading = false; this.refreshButton.removeClass('is-loading');
     this.articleLoading = false; this.reader.setAttribute('aria-busy', 'false');
@@ -401,7 +416,7 @@ export class ReaderView extends ItemView {
     this.entries = this.personalScope() ? this.localEntries() : source.startsWith('@qiaomu:') ? this.plugin.state.entries.filter(entry => this.qiaomuGroupIds().has(entry.sourceId)) : source ? [] : filterCuratedEntries(this.plugin.state, this.plugin.state.settings.pickedSourceIds === null ? qiaomuFeaturedEntries(this.plugin.state.entries) : this.plugin.state.entries);
     this.status.setText(''); this.renderChannel();
     const saved = this.plugin.state.channelStates[this.channelKey()];
-    if (saved) { this.restoreChannel(saved); if (!this.entries.length && refresh) void this.loadEntries(); return; }
+    if (saved) { this.restoreChannel(saved); if (refresh && (this.personalScope() || !this.entries.length)) void this.loadEntries(); return; }
     this.filter = 'all'; this.platform = 'all'; this.query = ''; this.searchInput.value = ''; this.searchBox.addClass('is-hidden'); this.lastListTop = 0; this.lastReaderTop = 0;
     this.renderFilters(); this.renderReader(); this.renderList(); this.list.scrollTop = 0; this.reader.scrollTop = 0;
     if (refresh) void this.loadEntries();
@@ -694,23 +709,26 @@ export class ReaderView extends ItemView {
     const version = ++this.articleVersion; const state = this.plugin.state;
     this.audioDock?.open(entry);
     this.bundle = state.cache[entry.id] || state.favorites[entry.id] || { entry, rewrite: entry.rewrite ?? null, translation: null, fetchedAt: 0 };
-    state.readIds = [...new Set([...state.readIds, entry.id])].slice(-5000); this.run(() => this.plugin.persist());
+    state.readIds = [...new Set([...state.readIds, entry.id])].slice(-5000);
     this.mode = entry.origin === 'local' || entry.origin === 'vault' ? 'original'
       : podcastDefaultMode(entry, state.sources, state.settings.followedPodcasts)
         ?? (entry.audio || videoEmbedUrl(entry.videoUrl || entry.link) ? 'original' : state.settings.defaultMode);
     this.message = ''; this.articleLoading = true; this.reader.setAttribute('aria-busy', 'true');
     this.contentEl.addClass('qrs-has-article'); this.renderReader(); this.reader.scrollTop = 0; this.lastReaderTop = 0; this.reader.focus({ preventScroll: true }); this.renderList();
     if (resume) { this.mode = resume.mode; this.pendingScroll = { listTop: resume.listTop, readerTop: resume.readerTop }; this.renderReader(); this.restoreOffsets(); }
+    // Closing the application need not close the leaf or produce a scroll event.
+    this.saveChannel(); this.run(() => this.plugin.persist());
     if (entry.origin === 'local') {
       this.bundle = { entry, rewrite: null, translation: null, fetchedAt: Date.now() };
-      this.plugin.remember(this.bundle); this.run(() => this.plugin.persist());
-      this.articleLoading = false; this.reader.setAttribute('aria-busy', 'false'); this.renderReader(); return;
+      this.plugin.remember(this.bundle);
+      this.articleLoading = false; this.reader.setAttribute('aria-busy', 'false'); this.renderReader();
+      this.saveChannel(); this.run(() => this.plugin.persist()); return;
     }
     try {
       const { bundle, warnings } = entry.origin === 'vault' ? { bundle: await this.plugin.vaultSources.article(entry), warnings: [] } : await this.plugin.api().article(entry.id, entry);
       if (this.closed || version !== this.articleVersion || this.plugin.articleDeleted(entry)) return;
       this.bundle = bundle; this.message = warnings.join('；');
-      this.plugin.remember(bundle); this.run(() => this.plugin.persist());
+      this.plugin.remember(bundle);
     } catch (error) {
       if (this.closed || version !== this.articleVersion) return;
       const cached = this.bundle.fetchedAt ? t('reader.cachedAt', { date: new Date(this.bundle.fetchedAt).toLocaleString() }) : t('reader.reopenRetry');
@@ -719,6 +737,7 @@ export class ReaderView extends ItemView {
     if (!this.closed && version === this.articleVersion) {
       if (this.mode === 'rewrite' && !this.bundle.rewrite?.body.trim()) this.mode = 'original';
       this.articleLoading = false; this.reader.setAttribute('aria-busy', 'false'); this.renderReader(); this.renderList();
+      this.saveChannel(); this.run(() => this.plugin.persist());
     }
   }
   /** Opens one article from outside the list, e.g. from Qiaomu Home. */
@@ -730,6 +749,7 @@ export class ReaderView extends ItemView {
     this.bundle = bundle; this.mode = mode; this.message = ''; this.audioDock?.open(bundle.entry);
     this.reader.setAttribute('aria-busy', 'false'); this.contentEl.addClass('qrs-has-article');
     this.renderReader(); this.reader.scrollTop = 0; this.lastReaderTop = 0; this.reader.focus({ preventScroll: true }); this.renderList();
+    this.saveChannel(); this.run(() => this.plugin.persist());
   }
   private noteCurrent() {
     const bundle = this.bundle; if (!bundle) return;
@@ -797,7 +817,7 @@ export class ReaderView extends ItemView {
     const bundle = this.bundle;
     if (!bundle) {
       const empty = this.reader.createDiv('qrs-welcome');
-      empty.createDiv({ cls: 'qrs-welcome-brand', text: 'QIAOMU RSS' });
+      empty.createDiv({ cls: 'qrs-welcome-brand', text: 'ZHENGTAO PICKS' });
       empty.createEl('h2', { text: t('welcome.title') });
       empty.createEl('p', { cls: 'qrs-welcome-intro', text: t('welcome.intro') });
       const tips = [

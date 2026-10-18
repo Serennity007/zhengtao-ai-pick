@@ -1,12 +1,12 @@
 import type { Plugin } from "obsidian";
 
-// Identical in every family plugin: one service per document, with reference
+// This independent reader owns its document service, with reference
 // counted ownership. It also works when Home or any other sibling is disabled.
-const SERVICE = Symbol.for("qiaomu.pane-dividers.v1");
+const SERVICE = Symbol.for("zhengtao-ai-pick.pane-dividers.v1");
 const HANDLE = ".workspace-leaf-resize-handle";
-const VIEWS = new Set(["qiaomu-reader", "qiaomu-book-reader-ai-chat", "qiaomu-agent-view", "qiaomu-ai-rss-reader", "qiaomu-home", "qiaomu-radio-view"]);
+const VIEWS = new Set(["zhengtao-ai-pick-reader"]);
 const STRUCTURE = ".workspace-leaf,.workspace-split,.workspace-tabs,.workspace-leaf-resize-handle";
-const PROPS = ["--qiaomu-divider-color", "--qiaomu-divider-hover", "--qiaomu-divider-start", "--qiaomu-divider-end", "--qiaomu-divider-direction"];
+const PROPS = ["--ztap-divider-color", "--ztap-divider-hover", "--ztap-divider-start", "--ztap-divider-end", "--ztap-divider-direction"];
 type Palette = { background: string; foreground: string; dark: boolean };
 type Pane = { rect: DOMRect; content: DOMRect; palette: Palette };
 type Saved = { original: [string, string][]; applied: string[]; hadClass: boolean };
@@ -57,7 +57,7 @@ function createService(doc: PaneDocument): DividerService | undefined {
       if (original?.[0]) handle.style.setProperty(key, original[0], original[1]);
       else handle.style.removeProperty(key);
     });
-    if (!previous.hadClass) handle.classList.remove("qiaomu-pane-divider");
+    if (!previous.hadClass) handle.classList.remove("ztap-pane-divider");
     saved.delete(handle);
   };
   const repaint = () => {
@@ -92,7 +92,7 @@ function createService(doc: PaneDocument): DividerService | undefined {
       active.add(handle);
       let previous = saved.get(handle);
       if (!previous) {
-        previous = { original: PROPS.map(key => [handle.style.getPropertyValue(key), handle.style.getPropertyPriority(key)]), applied: [], hadClass: handle.classList.contains("qiaomu-pane-divider") };
+        previous = { original: PROPS.map(key => [handle.style.getPropertyValue(key), handle.style.getPropertyPriority(key)]), applied: [], hadClass: handle.classList.contains("ztap-pane-divider") };
         saved.set(handle, previous);
       }
       const { background, foreground } = selected.palette;
@@ -108,7 +108,7 @@ function createService(doc: PaneDocument): DividerService | undefined {
         if (key && handle.style.getPropertyValue(key) !== value) handle.style.setProperty(key, value);
       });
       previous.applied = PROPS.map(key => handle.style.getPropertyValue(key));
-      handle.classList.add("qiaomu-pane-divider");
+      handle.classList.add("ztap-pane-divider");
     }
     for (const [handle, previous] of saved) if (!active.has(handle)) restore(handle, previous);
   };

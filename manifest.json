@@ -1,9 +1,9 @@
 {
-  "id": "qiaomu-ai-rss",
-  "name": "Zhengtao AI Pick",
-  "version": "1.0.0",
+  "id": "zhengtao-ai-pick",
+  "name": "正涛精选",
+  "version": "1.3.1",
   "minAppVersion": "1.13.0",
-  "description": "Fork of Qiaomu AI RSS (GPL-3.0-only, by 向阳乔木): pin a subscription group as its own top-level channel. 正涛精选 · 多智能体与 Agent 记忆订阅。",
+  "description": "独立的科研 RSS 阅读器：多智能体与 Agent 记忆订阅、分组置顶、全文阅读、收藏摘录与笔记归档。基于 Qiaomu AI RSS（GPL-3.0-only）。",
   "author": "正涛 (Serennity007)",
   "authorUrl": "https://github.com/Serennity007",
   "isDesktopOnly": false

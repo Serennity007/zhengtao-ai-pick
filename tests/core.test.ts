@@ -55,7 +55,7 @@ describe('untrusted remote content', () => {
     expect(url.searchParams.get('article')).toBe(options.article);
     expect(url.searchParams.get('mode')).toBe('rewrite');
     const first = appendDailyNoteLink('', bundle.entry, options);
-    expect(first.content).toContain('obsidian://qiaomu-ai-rss?');
+    expect(first.content).toContain('obsidian://zhengtao-ai-pick?');
     expect(first.content).toContain('[原文](<https://example.com/news>)');
     expect(first.content).not.toMatch(/^- /m);
     expect(first.content).not.toContain('<script>');
@@ -67,7 +67,7 @@ describe('untrusted remote content', () => {
     let content = appendDailyNoteLink('# My note\n', bundle.entry, a).content;
     content = appendDailyNoteLink(content, { ...bundle.entry, title: 'B' }, { ...a, article: 'b', excerpt: 'First B' }).content;
     content = appendDailyNoteLink(content, bundle.entry, { ...a, excerpt: 'Second A' }).content;
-    expect(content.split('obsidian://qiaomu-ai-rss?')).toHaveLength(3);
+    expect(content.split('obsidian://zhengtao-ai-pick?')).toHaveLength(3);
     expect(content.indexOf('Second A')).toBeLessThan(content.indexOf('First B'));
     expect(content).toContain('# My note');
     expect(appendDailyNoteLink(content, bundle.entry, { ...a, excerpt: 'Second A' }).added).toBe(false);
@@ -77,7 +77,7 @@ describe('untrusted remote content', () => {
     const old = dailyNoteLink(bundle.entry, a).replace(/%20/g, '+') + '\n\nFirst\n\n';
     const result = appendDailyNoteLink(old, bundle.entry, a);
     expect(result.content).not.toContain('Qiaomu+RSS+QA');
-    expect(result.content.split('obsidian://qiaomu-ai-rss?')).toHaveLength(2);
+    expect(result.content.split('obsidian://zhengtao-ai-pick?')).toHaveLength(2);
     expect(result.content).toContain('First\n\nSecond');
   });
   it('adds an original link to an existing grouped header without duplicating it', () => {

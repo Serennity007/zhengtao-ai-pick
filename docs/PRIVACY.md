@@ -1,50 +1,41 @@
-# Privacy policy
+# 隐私与网络说明
 
-Effective: 2026-09-07 (0.11.0). Maintainer: 向阳乔木, [GitHub](https://github.com/joeseesun).
+适用版本：正涛精选 1.3.0。更新日期：2026-10-19。项目维护入口：[Serennity007/zhengtao-ai-pick](https://github.com/Serennity007/zhengtao-ai-pick)。上游 Qiaomu 服务由其运营方管理，服务端日志与数据保留规则不受本插件控制。
 
-Qiaomu AI RSS is a local reader for a remote Qiaomu RSS API. It requests public sources, entry lists, article details, and existing translation/rewrite assets. The default server is `rss.qiaomu.ai`. A user-configured server is governed by its own operator's policy.
+## 本地数据与迁移
 
-Podcast entries may include a direct HTTPS audio URL. The player does not preload audio; playing it contacts the media host. YouTube links are recognized only from supported YouTube domains. Opening a YouTube article creates a restricted YouTube iframe preview without autoplay; YouTube can receive normal connection metadata and its embedded player runs its own scripts before playback. Switching articles or closing the reader unloads the active media. If playback is blocked, users can deliberately open the original link in a browser.
+插件使用 Obsidian 插件存储，在当前库配置目录的 `plugins/zhengtao-ai-pick/` 中保存设置、订阅、分组、已读、收藏、频道状态和文章快照。图片保存在该插件的本地缓存目录。插件不加密这些文件；如果你同步库配置，同步提供方也可能复制这些数据。
 
-The plugin sends no vault files, local searches, read states or favorites to that API. It has no analytics SDK, tracking identifier, account login or model-provider credentials. The API operator and hosting infrastructure can see standard connection/request metadata, including IP addresses and requested paths, and may retain operational access and error logs. This release does not claim that the service is log-free; server log retention is not controlled by the plugin.
+自己的 `data.json` 不存在时，首次启动会读取同库 `qiaomu-ai-rss` 与 `zhengtao-picks` 的本地数据，通过 `createIntegratedState()` 一次性合并订阅、已读、收藏及快照并保存。后续不再读取两套旧状态，也不反向同步。迁移保留旧文件，不改写已有笔记 URI，不复制管理员令牌、邀请码、收录客户端密钥等服务凭据。公开科研源目录可以随源码分发，个人 `data.json`、私有 URL、备份及凭据不进入源码包或安装三件套。
 
-Images are enabled by default and can be disabled in settings. Raster article images and list thumbnails are downloaded through Obsidian, validated, and stored in this plugin’s image-cache folder inside the vault configuration (up to 64 MB / 100 files; 8 MB per image). The interface displays local Blob URLs and can reuse cached images offline. Third-party hosts see initial/retry image requests. SVG and executable payloads are not rendered. External links opened deliberately are governed by the destination sites' privacy policies.
+禁用新插件并重新启用旧版即可回滚到旧数据。整合后在新插件发生的阅读、收藏和摘录不会反向同步至旧版。移除新插件的 `data.json` 和图片缓存可删除其本地阅读数据；已写入的笔记、附件及单独导出的文件需要由你管理。删除快照会影响依赖新协议的回链；旧乔木回链仍由原插件处理。
 
-Opening the About settings tab loads the reward and public-account QR images from `radio.qiaomu.ai`. That host sees ordinary image request metadata. These images are not requested during article reading.
+## 个人 RSS 与科研源
 
-Local settings, read IDs, entries and cached/favorite article bodies reside in the vault configuration's plugin folder, using Obsidian's storage API. The note action reads the core Daily Notes configuration and appends the article title and a vault-scoped internal reader link, plus explicitly selected text when requested to today's note, creating it from the configured template when needed. Captured article snapshots remain in plugin data independently of the recent cache, allowing internal links to reopen the saved reading version offline. Deleting plugin data breaks those internal links; note text remains. No selections or notes are transmitted. Your configured sync/backup service may copy these files. The plugin neither encrypts local data nor reads files outside the vault.
+插件通过 Obsidian HTTP(S) 接口直接获取你添加的 RSS / Atom 地址，包括内置的 23 个公开科研源。对应主机可收到 IP 地址、请求时间及路径等连接信息。订阅分组、收藏、已读与正文不上传给乔木服务。源 URL 若包含访问令牌，该令牌会随请求发送给源主机，并保存在未加密的本地插件数据和 OPML 导出中。
 
-To remove local reader data, disable the plugin and remove its `data.json` and `image-cache/` folder in the vault's configured plugin directory. Daily Notes and exports remain under your control. Removing plugin data does not remove files you explicitly exported or service access logs. Contact the maintainer through GitHub for privacy questions; do not post private data or credentials in public issues.
+添加订阅会读取并验证来源。进入个人频道时，插件会刷新超过 5 分钟的缓存；点击刷新会强制获取。自动批次最多刷新 20 个源，以最多 3 个请求并发执行。插件不注册定时轮询，已发出的请求可能在视图关闭后完成。每个 RSS 最多保留 50 篇文章，刷新失败会保留已有文章。
 
-## Personal subscriptions
+OPML 导入先在本地预览；导入本身不请求各源正文。在线 OPML 导入会请求你提供的文件地址。导出会把订阅地址、名称与分组写入库内文件。取消订阅移除其列表与缓存，已收藏或摘录的文章快照、日记文本和导出文件仍保留。
 
-Personal RSS/Atom URLs are fetched directly through Obsidian's HTTP(S) API, without a Qiaomu proxy, account or AI generation. Hosts receive normal connection metadata. Adding a source fetches and validates it; selecting a personal channel refreshes caches older than five minutes; the refresh button forces a request. A batch uses up to three workers. No periodic polling is registered. Requests already initiated may finish after a view closes.
+## 远程精选、目录与 AI 版本
 
-OPML imports are previewed and stored locally without fetching feeds at import time. Exports create an OPML file in the configured vault export folder. URLs, names, groups, cached feed articles, errors and update times are saved in plugin data. Feed URLs with query tokens may grant access to private content; plugin data and OPML exports are unencrypted and should not be shared publicly. URL-embedded usernames/passwords are not accepted.
+打开远程频道、文章或在线目录时，插件请求配置的 HTTPS 服务，默认是 `https://rss.qiaomu.ai`。服务可接收所请求的文章／频道标识、IP 地址、时间及其他常规 HTTP 信息，并可能保留访问与错误日志。公众号在线目录和在线播客搜索也使用配置的服务，在线搜索会发送输入的搜索词。
 
-Canceling a subscription removes its list/cache, but keeps favorited article snapshots and links already added to Daily Notes. Switching the Qiaomu service origin preserves personal subscriptions and favorites. Removing plugin data removes subscriptions; Daily Notes and separately exported OPML files remain.
+离线内置目录的搜索在本地进行。插件读取远程服务已有的翻译、改写、播客和文稿；常规阅读及订阅不申请新 AI 生成。个人 RSS 使用原文或摘要，插件没有独立模型 API 或本机生成能力。它不向远程服务提交库内笔记、选中文本、本地搜索、已读或收藏。
 
-## Discovery and RSSHub
+实验室的链接收录属于可选远程服务流程。主动启用、验证并提交链接后，配置的服务会接收该链接，抓取正文并按其流程处理，结果可能公开收录。使用该功能时，本地会保存邀请码、随机客户端访问密钥及申请记录。管理员功能需要服务端账号验证，可能保存会话令牌；密码不保存。整合迁移不继承这些凭据。服务兼容性和内容处理由对应运营方决定。
 
-Featured feeds, ten podcast recommendations, and the independent blog catalog are read locally. Their local search terms and filters are not sent to catalog providers. Opening or searching the WeChat tab requests the public catalog from the configured Qiaomu Reader service; online podcast search sends the entered term to that service. Following a podcast reads episodes and available source transcripts; registered Reader sources can also expose existing rewrites. Subscribing does not request AI generation. The service receives ordinary request metadata. The plugin loads no remote favicons and does not fetch individual personal RSS feeds until Subscribe is clicked. Existing user subscriptions retain their saved URLs. Clicking a blog home-page or catalog-source link opens that destination in the browser.
+## 图片、音频与视频
 
-## Vault Markdown folders
+图片默认开启，可在设置中关闭。插件从图片主机下载并校验文章图片、缩略图和来源图标，再显示本地缓存；对应主机收到普通图片请求。缓存上限为 64 MB / 100 个文件，单张最多 8 MB。缺少图标时显示文字缩写，不把订阅列表发给第三方 favicon 查询服务。新版关于页不加载上游打赏或公众号二维码。
 
-Only explicitly selected vault folders (including their descendants) are listed as local Markdown sources. File names, modification times and frontmatter are used locally; bodies are read when opened and recent/favorite/captured snapshots remain in plugin data. They are never sent to Qiaomu. Removing a folder source does not delete files or existing saved snapshots. Native Obsidian Markdown rendering resolves internal links and attachments and follows native/plugin rendering behavior, including requests for remote embeds present in the selected note. The RSS image-cache setting applies to RSS HTML, not native Markdown embeds.
+播放播客音频时会联系条目提供的媒体主机，播放器不预载音频。打开含 YouTube 视频的文章会加载限制权限、无自动播放的播放器预览，YouTube 在播放前也可能收到连接信息并运行其播放器脚本。打开原文或其他外部链接后，对应网站适用自己的隐私规则。
 
-The selection popup is disabled by default. Turning it on and typography preferences are stored in the vault plugin settings.
+## 库内笔记与导出
 
-Dragging an image transfers its local raster bytes to Obsidian. Dropping into a note uses native attachment handling and the configured attachment location; it creates a normal vault attachment, which is independent of the RSS image cache. Native Markdown attachment bytes may be read locally to prepare a drag. Canceling a drag does not create an attachment.
+只有你选择的库内 Markdown 文件或文件夹会成为本地来源。插件在本地读取文件名、修改时间、属性和正文；移除来源不删除文件。Obsidian 原生渲染会处理笔记内的附件与嵌入，笔记本身的远程图片或第三方渲染器可能发出网络请求。
 
-## Personal library and discovery (0.20.0)
+摘录与日记操作会在库内追加文章标题、选定文本及内部回链；保存文章会在你选择的库内目录创建笔记和附件。回链所用快照独立于最近 40 篇正文缓存保留。拖入笔记的图片交由 Obsidian 的附件机制保存，独立于插件图片缓存。桌面 Markdown / PDF 导出通过系统对话框写入你选择的位置。
 
-RSS, followed podcasts and chosen vault paths share local grouping metadata. Group changes never publish subscriptions to Qiaomu Picks or change public source catalogs. Upgrading a pre-library data file creates `data-before-library-v1.json` beside `data.json`; it contains the same private URLs as the original file and is kept for manual rollback. Removing a local source only removes its reading subscription; it does not delete vault files.
-
-The Tidings metadata snapshot is bundled for offline discovery (CC0-1.0) and ships with plugin updates; discovery makes no catalog download of its own. A `tidings-catalog.json` cached by an earlier version is read only while it is newer than the bundled snapshot. Online OPML import requests the user-provided URL. Imports are previewed and selected before being stored; feed bodies are not downloaded by import itself. Searching online WeChat/podcast catalogs sends search terms to the configured Qiaomu service. Selecting Preview requests that feed or podcast's recent entries.
-
-When remote images are enabled, visible source avatars and publisher favicons are fetched and cached by the existing local image service. No third-party favicon lookup service receives the subscription list. Missing icons fall back to text. Automatic batches refresh at most 20 RSS sources with 3 concurrent requests; local folders and remote podcasts are opened explicitly.
-
-## Saving articles (0.20.0)
-
-存为笔记 writes the current article version into the vault folder chosen in settings (default `Qiaomu RSS/文章`) using Obsidian's vault API. Images already shown by the reader are copied from the local image cache into the vault attachment location configured in Obsidian; images that cannot be saved keep their original web link. The plugin stores a local map from article ID and version to the saved note path so the toolbar can open that note; it follows renames and is never sent anywhere. PDF export on desktop uses the system save dialog and remembers the last chosen directory in plugin settings.
-
+插件没有专用分析或广告 SDK。公开问题反馈请使用项目仓库，提交问题时不要附带个人插件数据、私有订阅令牌或服务凭据。

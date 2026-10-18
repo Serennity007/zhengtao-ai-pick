@@ -14,10 +14,18 @@ export function ensureGroup(state: State, raw: string): string {
 export function registerSource(state: State, id: string, group: string) {
   if (!state.sourceMeta[id]) state.sourceMeta[id] = { groupId: ensureGroup(state, group), name: '', order: Object.keys(state.sourceMeta).length };
 }
+const MAX_PINNED_GROUPS = 50;
+function normalizePinnedGroups(state: State) {
+  const valid = new Set(state.subscriptionGroups.map(g => g.id));
+  state.settings.pinnedGroupIds = [...new Set(state.settings.pinnedGroupIds)].filter(id => valid.has(id)).slice(0, MAX_PINNED_GROUPS);
+}
 /** Pin a subscription group so the channel picker shows it as its own top-level section instead of nesting it under 我的订阅. */
 export function togglePinnedGroup(state: State, id: string): boolean {
+  if (!state.subscriptionGroups.some(g => g.id === id)) fail('error.groupMissing');
+  normalizePinnedGroups(state);
   const pinned = new Set(state.settings.pinnedGroupIds);
-  if (pinned.has(id)) pinned.delete(id); else pinned.add(id);
+  if (pinned.has(id)) pinned.delete(id);
+  else if (pinned.size < MAX_PINNED_GROUPS) pinned.add(id);
   state.settings.pinnedGroupIds = [...pinned];
   return pinned.has(id);
 }
@@ -26,6 +34,7 @@ export function migrateLibrary(state: State) {
   for (const id of state.settings.followedPodcasts) registerSource(state, id, '播客');
   for (const path of state.settings.markdownFolders) registerSource(state, `@vault:${path}`, '');
   mergeDuplicateGroups(state);
+  normalizePinnedGroups(state);
   const valid = new Set(state.subscriptionGroups.map(g => g.id));
   for (const meta of Object.values(state.sourceMeta)) if (meta.groupId && !valid.has(meta.groupId)) meta.groupId = '';
   if (state.settings.lastSource.startsWith('@group:')) {
@@ -48,6 +57,8 @@ export function mergeDuplicateGroups(state: State) {
   for (const feed of state.subscriptions) { const id = state.sourceMeta[feed.id]?.groupId; if (id) feed.group = names.get(id) || feed.group; }
   state.subscriptionGroups = groupsInOrder(state).filter(g => !moved.has(g.id)).map((g, order) => ({ ...g, order }));
   state.collapsedGroups = [...new Set(state.collapsedGroups.map(id => moved.get(id) || id))].filter(id => !moved.has(id));
+  state.settings.pinnedGroupIds = state.settings.pinnedGroupIds.map(id => moved.get(id) || id);
+  normalizePinnedGroups(state);
   const last = state.settings.lastSource.startsWith('@group:') ? moved.get(state.settings.lastSource.slice(7)) : undefined;
   if (last) state.settings.lastSource = `@group:${last}`;
   return true;
@@ -75,7 +86,13 @@ export function renameGroup(state: State, id: string, raw: string) {
   const group = state.subscriptionGroups.find(g => g.id === id); if (!group) fail('error.groupMissing');
   // Renaming onto an existing name merges the two groups instead of failing.
   const target = state.subscriptionGroups.find(g => g.id !== id && groupKey(g.name) === groupKey(name));
-  if (target) { moveSources(state, personalSources(state).filter(s => s.groupId === id).map(s => s.id), target.id); deleteGroup(state, id); return target.id; }
+  if (target) {
+    moveSources(state, personalSources(state).filter(s => s.groupId === id).map(s => s.id), target.id);
+    state.settings.pinnedGroupIds = state.settings.pinnedGroupIds.map(pin => pin === id ? target.id : pin);
+    state.collapsedGroups = [...new Set(state.collapsedGroups.map(group => group === id ? target.id : group))];
+    if (state.settings.lastSource === `@group:${id}`) state.settings.lastSource = `@group:${target.id}`;
+    deleteGroup(state, id); normalizePinnedGroups(state); return target.id;
+  }
   group.name = name; moveSources(state, personalSources(state).filter(s => s.groupId === id).map(s => s.id), id); return id;
 }
 export function deleteGroup(state: State, id: string) {

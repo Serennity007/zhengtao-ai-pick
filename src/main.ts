@@ -1,3 +1,5 @@
+import { PLUGIN_ID, PLUGIN_NAME, PROJECT_URL } from './identity';
+import { firstRunState } from './first-run';
 import { CuratedSourcePicker } from './curated-source-picker';
 import { applyCuratedPicks } from './curated-sources';
 import { watchPaneDividers } from "./pane-dividers";
@@ -24,7 +26,7 @@ import { RETIRED_VIEW_TYPES, RetiredView, SubscriptionCenter, type CenterTab } f
 import { t } from './i18n';
 import { articleFolderPath } from './vault-export';
 
-export default class QiaomuRssPlugin extends Plugin {
+export default class ZhengtaoPicksPlugin extends Plugin {
   fonts = new ReadingFonts();
   vaultSources = new VaultSources(this.app);
   state: State = initialState(null);
@@ -53,9 +55,10 @@ export default class QiaomuRssPlugin extends Plugin {
       }
     }));
     const data: unknown = await this.loadData();
-    try { this.state = initialState(data); }
+    try { this.state = data == null ? await firstRunState(this.app.vault) : initialState(data); }
     catch { new Notice(t('notice.dataUnreadable')); throw new Error('Incompatible RSS data'); }
     applyCuratedPicks(this.state);
+    if (data == null) await this.persist();
     this.adminSession = this.state.collectionAdminSession ?? undefined;
     if (data && typeof data === 'object' && !('libraryVersion' in data)) {
       const backup = `${this.app.vault.configDir}/plugins/${this.manifest.id}/data-before-library-v1.json`;
@@ -72,7 +75,7 @@ export default class QiaomuRssPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => { retire(); window.setTimeout(retire, 500); });
     this.addCommand({ id: 'explore-subscriptions', name: t('cmd.exploreSubscriptions'), callback: () => { void this.openDiscovery(); } });
     this.addCommand({ id: 'pick-qiaomu-sources', name: t('pick.title'), callback: () => this.pickCuratedSources() });
-    this.addRibbonIcon('rss', t('cmd.openReader'), () => { void this.openReader(); });
+    this.addRibbonIcon('telescope', t('cmd.openReader'), () => { void this.openReader(); });
     this.addCommand({ id: 'open-reader', name: t('cmd.openReader'), callback: () => { void this.openReader(); } });
     this.registerInterval(window.setInterval(() => { void this.checkCollectionJobs(); }, 15000));
     void this.checkCollectionJobs();
@@ -97,7 +100,7 @@ export default class QiaomuRssPlugin extends Plugin {
       }
     });
     this.registerMarkdownPostProcessor(element => {
-      for (const link of element.querySelectorAll<HTMLAnchorElement>('a[href^="obsidian://qiaomu-ai-rss?"]')) {
+      for (const link of element.querySelectorAll<HTMLAnchorElement>('a[href^="obsidian://zhengtao-ai-pick?"]')) {
         link.setAttribute('href', repairArticleLinks(link.getAttribute('href') || ''));
       }
     });
@@ -112,12 +115,12 @@ export default class QiaomuRssPlugin extends Plugin {
         const cm = EditorView.findFromDOM(editorLink);
         if (cm) {
           const position = cm.posAtDOM(editorLink), line = cm.state.doc.lineAt(position);
-          for (const match of line.text.matchAll(/\[[^\n]*?\]\(<(obsidian:\/\/qiaomu-ai-rss\?[^>]+)>\)/g)) {
+          for (const match of line.text.matchAll(/\[[^\n]*?\]\(<(obsidian:\/\/zhengtao-ai-pick\?[^>]+)>\)/g)) {
             if (position >= line.from + match.index && position <= line.from + match.index + match[0].length) { href = match[1]; break; }
           }
         }
       }
-      if (!href?.startsWith('obsidian://qiaomu-ai-rss?')) return;
+      if (!href?.startsWith('obsidian://zhengtao-ai-pick?')) return;
       const url = new URL(repairArticleLinks(href));
       if (url.searchParams.get('vault') !== this.app.vault.getName()) return;
       event.preventDefault(); event.stopImmediatePropagation();
@@ -126,7 +129,8 @@ export default class QiaomuRssPlugin extends Plugin {
     }, { capture: true });
     registerLinks(document);
     this.registerEvent(this.app.workspace.on('window-open', (_window, win) => registerLinks(win.document)));
-    this.registerObsidianProtocolHandler('qiaomu-ai-rss', params => {
+    this.registerObsidianProtocolHandler(PLUGIN_ID, params => {
+      if (!params.article) { void this.openReader(); return; }
       void this.openSavedArticle(params.article || '', params.mode || 'original').catch(() => new Notice(t('notice.localCopyMissingShort')));
     });
   }
@@ -345,11 +349,13 @@ export default class QiaomuRssPlugin extends Plugin {
         .find(view => view instanceof MarkdownView && view.file === file);
       if (view instanceof MarkdownView) {
         const content = view.editor.getValue();
+        if (!content.includes('obsidian://zhengtao-ai-pick?')) return;
         const matches = [...content.matchAll(/^[ \t]*<!-- qrs-article:[^\r\n]*?-->[ \t]*(?:\r?\n)?/gm)];
         for (const match of matches.reverse()) view.editor.replaceRange('', view.editor.offsetToPos(match.index), view.editor.offsetToPos(match.index + match[0].length));
         if (matches.length) await view.save();
       } else {
         const content = await this.app.vault.cachedRead(file);
+        if (!content.includes('obsidian://zhengtao-ai-pick?')) return;
         if (cleanCaptureMarkers(content) !== content) await this.app.vault.process(file, cleanCaptureMarkers);
       }
     }).catch(() => { new Notice(t('notice.excerptMarksNotCleared')); });
@@ -432,18 +438,18 @@ export default class QiaomuRssPlugin extends Plugin {
     const app = this.app as App & { setting: { open(): void; openTabById(id: string): void } };
     app.setting.open(); app.setting.openTabById(tabId);
   }
-  editLibrary(edit: () => void): Promise<void> {
-    const operation = this.libraryEdits.catch(() => undefined).then(() => this.applyLibraryEdit(edit));
+  editLibrary(edit: () => void, removedSourceIds: string[] = []): Promise<void> {
+    const operation = this.libraryEdits.catch(() => undefined).then(() => this.applyLibraryEdit(edit, removedSourceIds));
     this.libraryEdits = operation; return operation;
   }
-  private async applyLibraryEdit(edit: () => void) {
-    const snapshot = structuredClone({ subscriptionGroups: this.state.subscriptionGroups, sourceMeta: this.state.sourceMeta, collapsedGroups: this.state.collapsedGroups, subscriptions: this.state.subscriptions, settings: this.state.settings });
+  private async applyLibraryEdit(edit: () => void, removedSourceIds: string[]) {
+    const snapshot = structuredClone({ subscriptionGroups: this.state.subscriptionGroups, sourceMeta: this.state.sourceMeta, collapsedGroups: this.state.collapsedGroups, subscriptions: this.state.subscriptions, settings: this.state.settings, channelStates: this.state.channelStates });
     try { edit(); migrateLibrary(this.state); await this.persist(); }
     catch (e) { Object.assign(this.state, snapshot); throw e; }
-    this.refreshPersonalViews(); this.refreshDiscovery();
+    this.refreshPersonalViews(removedSourceIds); this.refreshDiscovery();
   }
-  refreshPersonalViews() {
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) if (leaf.view instanceof ReaderView) leaf.view.refreshPersonalSources();
+  refreshPersonalViews(removedSourceIds: string[] = []) {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) if (leaf.view instanceof ReaderView) leaf.view.refreshPersonalSources(removedSourceIds);
   }
   async addLocalSource(path: string, groupId?: string) {
     await this.editLibrary(() => { if (!this.state.settings.markdownFolders.includes(path)) this.state.settings.markdownFolders.push(path); registerSource(this.state, `@vault:${path}`, ''); if (groupId !== undefined) moveSources(this.state, [`@vault:${path}`], groupId); });
@@ -455,7 +461,17 @@ export default class QiaomuRssPlugin extends Plugin {
       this.state.settings.markdownFolders = this.state.settings.markdownFolders.filter(path => !ids.includes(`@vault:${path}`));
       for (const id of ids) { delete this.state.sourceMeta[id]; delete this.state.settings.podcastNames[id]; }
       if (ids.includes(this.state.settings.lastSource)) this.state.settings.lastSource = '@local';
-    });
+      const removed = new Set(ids);
+      for (const [key, channel] of Object.entries(this.state.channelStates)) {
+        let source: unknown;
+        try { const parts: unknown = JSON.parse(key); if (Array.isArray(parts)) source = parts[1]; } catch { /* Still sanitize entries in a legacy checkpoint. */ }
+        if (typeof source === 'string' && removed.has(source)) { delete this.state.channelStates[key]; continue; }
+        const removedEntries = new Set(channel.entries.filter(entry => removed.has(entry.sourceId)).map(entry => entry.id));
+        channel.entries = channel.entries.filter(entry => !removed.has(entry.sourceId));
+        channel.unread = channel.unread.filter(id => !removedEntries.has(id));
+        if (channel.bundle && removed.has(channel.bundle.entry.sourceId)) { channel.bundle = null; channel.articlePending = false; }
+      }
+    }, ids);
   }
   async openPersonalSource(id: string) {
     this.center?.close();
@@ -542,7 +558,7 @@ export default class QiaomuRssPlugin extends Plugin {
 }
 class RssSettings extends PluginSettingTab {
   private section: 'reading' | 'sources' | 'excerpt' | 'lab' | 'about' = 'reading';
-  constructor(app: App, private plugin: QiaomuRssPlugin) { super(app, plugin); this.containerEl.addClass('qrs-settings'); }
+  constructor(app: App, private plugin: ZhengtaoPicksPlugin) { super(app, plugin); this.containerEl.addClass('qrs-settings'); }
   getSettingDefinitions(): SettingDefinitionItem[] {
     const settings = this.plugin.state.settings;
     const saveReading = async () => { this.plugin.refreshPreferences(); await this.plugin.persist(); };
@@ -624,7 +640,7 @@ class RssSettings extends PluginSettingTab {
           const details = setting.descEl.createEl('details');
           details.createEl('summary', { text: t('settings.changelogSummary') });
           details.createEl('p', { text: t('settings.changelogBody') });
-          details.createEl('a', { text: t('settings.changelogLink'), href: 'https://github.com/joeseesun/qiaomu-ai-rss/releases', attr: { target: '_blank', rel: 'noopener noreferrer' } });
+          details.createEl('a', { text: t('settings.changelogLink'), href: `${PROJECT_URL}/releases`, attr: { target: '_blank', rel: 'noopener noreferrer' } });
         } },
       ] },
       { name: t('settings.localData.name'), desc: t('settings.localData.desc') },
@@ -643,24 +659,13 @@ class RssSettings extends PluginSettingTab {
         setting.addButton(button => button.setButtonText(t('lab.manage')).onClick(() => this.plugin.openCollectionSettings()));
       } }],
       about: [definitions[6], ...([
-        [t('about.reportBug'), t('about.reportBug.desc'), 'https://github.com/joeseesun/qiaomu-ai-rss/issues/new'],
-        [t('about.email'), 'vista8@gmail.com', 'mailto:vista8@gmail.com'],
-        [t('about.guide'), t('about.guide.desc'), 'https://github.com/joeseesun/qiaomu-ai-rss#readme'],
-        ['向阳乔木', 'qiaomu.ai', 'https://qiaomu.ai/'],
-        ['乔木博客', 'blog.qiaomu.ai', 'https://blog.qiaomu.ai/'],
-        ['X', '@vista8', 'https://x.com/vista8'],
-        ['GitHub', '@joeseesun', 'https://github.com/joeseesun'],
+        [t('about.reportBug'), t('about.reportBug.desc'), PROJECT_URL + '/issues/new'],
+        [t('about.guide'), t('about.guide.desc'), PROJECT_URL + '#readme'],
+        ['GitHub', 'Serennity007 / zhengtao-ai-pick', PROJECT_URL],
+        ['上游项目', '向阳乔木 / Qiaomu AI RSS · GPL-3.0-only', 'https://github.com/joeseesun/qiaomu-ai-rss'],
       ]).map(([name, label, href]) => ({ name, render: (setting: import('obsidian').Setting) => {
         setting.controlEl.createEl('a', { text: label, href, attr: { target: '_blank', rel: 'noopener noreferrer' } });
-      } })), { name: t('about.wechat'), render: setting => { setting.controlEl.createSpan({ text: 'joeseesun' }); } },
-      { name: t('about.donate'), desc: t('about.donate.desc'), render: setting => {
-        setting.settingEl.addClass('qrs-settings-qr');
-        setting.controlEl.createEl('img', { attr: { src: 'https://radio.qiaomu.ai/assets/qiaomu_reward_qr.png', alt: t('about.donateAlt'), loading: 'lazy', width: '160', height: '160' } });
-      } },
-      { name: t('about.followAccount'), desc: t('about.followAccount.desc'), render: setting => {
-        setting.settingEl.addClass('qrs-settings-qr');
-        setting.controlEl.createEl('img', { attr: { src: 'https://radio.qiaomu.ai/assets/qiaomu_wechat_public_account_qr.jpg', alt: t('about.followAlt'), loading: 'lazy', width: '160', height: '160' } });
-      } },
+      } })),
       { name: t('about.license'), desc: t('about.license.desc'), render: setting => {
         setting.addButton(button => {
           button.setIcon('shield').onClick(() => this.plugin.openCollectionSettings(true));
@@ -672,7 +677,7 @@ class RssSettings extends PluginSettingTab {
       } }],
     };
     const tabLabels: Record<string, string> = { reading: t('settings.tab.reading'), sources: t('settings.tab.sources'), excerpt: t('settings.tab.excerpt'), lab: t('settings.tab.lab'), about: t('settings.tab.about') };
-    return [{ name: 'Qiaomu AI RSS', searchable: false, render: setting => {
+    return [{ name: PLUGIN_NAME, searchable: false, render: setting => {
       setting.settingEl.addClass('qrs-settings-header');
       // Obsidian reuses the setting row when definitions update.
       setting.settingEl.querySelectorAll('.qrs-settings-tabs').forEach(nav => nav.remove());

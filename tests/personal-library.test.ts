@@ -130,4 +130,46 @@ describe('pinning a subscription group as a top-level channel', () => {
     expect(Array.isArray(state.settings.pinnedGroupIds)).toBe(true);
     expect(state.settings.pinnedGroupIds).toEqual([]);
   });
+  it('refuses the 51st pin without creating an unloadable state and still allows unpinning', () => {
+    const state = initialState();
+    const ids = Array.from({ length: 51 }, (_, n) => ensureGroup(state, `Group ${n}`));
+    for (const id of ids.slice(0, 50)) expect(togglePinnedGroup(state, id)).toBe(true);
+    expect(togglePinnedGroup(state, ids[50])).toBe(false);
+    expect(state.settings.pinnedGroupIds).toEqual(ids.slice(0, 50));
+    expect(initialState(state).settings.pinnedGroupIds).toEqual(ids.slice(0, 50));
+    expect(togglePinnedGroup(state, ids[0])).toBe(false);
+    expect(togglePinnedGroup(state, ids[50])).toBe(true);
+    expect(state.settings.pinnedGroupIds).toHaveLength(50);
+  });
+  it('recovers old oversized pin lists while dropping duplicate and invalid ids', () => {
+    const groups = Array.from({ length: 52 }, (_, n) => ({ id: `g${n}`, name: `Group ${n}`, order: n }));
+    const pinnedGroupIds = ['missing', '', null, 123, 'x'.repeat(121), 'g0', 'g0', ...groups.slice(1).map(g => g.id)];
+    const state = initialState({ subscriptionGroups: groups, settings: { pinnedGroupIds }, readIds: ['keep-reading-progress'] });
+    expect(state.settings.pinnedGroupIds).toEqual(groups.slice(0, 50).map(g => g.id));
+    expect(state.readIds).toEqual(['keep-reading-progress']);
+    expect(initialState(state)).toEqual(state);
+  });
+  it('keeps a pin and current channel when renaming into an existing group', () => {
+    const state = initialState(), target = ensureGroup(state, 'AI'), merged = ensureGroup(state, 'Research');
+    togglePinnedGroup(state, merged); state.settings.lastSource = `@group:${merged}`; state.collapsedGroups = [merged];
+    expect(renameGroup(state, merged, 'ai')).toBe(target);
+    expect(state.settings.pinnedGroupIds).toEqual([target]);
+    expect(state.settings.lastSource).toBe(`@group:${target}`);
+    expect(state.collapsedGroups).toEqual([target]);
+    expect(initialState(state).settings.pinnedGroupIds).toEqual([target]);
+  });
+  it('maps alias pins to the retained group and avoids stale or duplicate ids', () => {
+    const state = initialState({
+      subscriptionGroups: [{ id: 'a', name: '播客', order: 0 }, { id: 'b', name: 'Podcasts', order: 1 }],
+      settings: { pinnedGroupIds: ['b', 'a', 'missing'] },
+    });
+    expect(state.subscriptionGroups.map(g => g.id)).toEqual(['a']);
+    expect(state.settings.pinnedGroupIds).toEqual(['a']);
+    expect(initialState(state).settings.pinnedGroupIds).toEqual(['a']);
+  });
+  it('does not pin a group that no longer exists', () => {
+    const state = initialState();
+    expect(() => togglePinnedGroup(state, 'missing')).toThrow('分组不存在');
+    expect(state.settings.pinnedGroupIds).toEqual([]);
+  });
 });
