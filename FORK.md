@@ -8,7 +8,7 @@
 | --- | --- |
 | 名称 | 正涛精选 |
 | 插件 ID | `zhengtao-ai-pick` |
-| 当前版本 | `1.4.0` |
+| 当前版本 | `1.5.0` |
 | 安装目录 | `<库>/.obsidian/plugins/zhengtao-ai-pick/` |
 | 新文章回链 | `obsidian://zhengtao-ai-pick` |
 

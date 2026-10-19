@@ -1,6 +1,7 @@
 import { migrateLibrary } from './personal-library';
 import { z } from 'zod';
 import { t } from './i18n';
+import { researchTopics } from './research-queue';
 
 export const modeSchema = z.enum(['rewrite', 'translation', 'original']);
 export type Mode = z.infer<typeof modeSchema>;
@@ -37,6 +38,10 @@ export function podcastDefaultMode(entry: Entry, sources: Source[], followedPodc
 }
 export const bundleSchema = z.object({ entry: entrySchema, rewrite: rewriteSchema.nullable(), translation: translationSchema.nullable(), fetchedAt: z.number() });
 export type Bundle = z.infer<typeof bundleSchema>;
+export const researchQueueSchema = z.object({
+  keywords: z.string().max(4000).default(researchTopics[0].keywords), exclude: z.string().max(4000).default('招聘,限时优惠'),
+  days: z.number().int().min(1).max(90).default(7), limit: z.number().int().min(1).max(50).default(10), perSource: z.number().int().min(1).max(5).default(2),
+});
 export const pageSchema = z.object({ entries: z.array(entrySchema), hasMore: z.boolean().optional(), nextCursor: z.string().nullish() });
 export const subscriptionSchema = z.object({
   id: z.string(), url: z.string(), name: z.string(), group: z.string().default(''), site: z.string().optional(), image: z.string().optional(),
@@ -76,6 +81,8 @@ export const stateSchema = z.object({
   collectionJobs: z.array(collectionJobSchema).default([]),
   deletedEntries: z.record(z.string(), z.array(z.string())).default({}),
   readIds: z.array(z.string()).default([]), favorites: z.record(z.string(), bundleSchema).default({}),
+  researchQueue: researchQueueSchema.default({ keywords: researchTopics[0].keywords, exclude: '招聘,限时优惠', days: 7, limit: 10, perSource: 2 }),
+  readLater: z.record(z.string(), z.object({ bundle: bundleSchema, savedAt: z.number() })).default({}),
   entries: z.array(entrySchema).default([]), sources: z.array(sourceSchema).default([]),
   subscriptions: z.array(subscriptionSchema).default([]),
   channelStates: z.record(z.string(), channelStateSchema).catch({}).default({}),
@@ -140,7 +147,7 @@ export function renameArticleNotes(notes: Record<string, string>, oldPath: strin
   return changed;
 }
 export function withServiceOrigin(state: State, baseUrl: string): State {
-  return initialState({ deletedEntries: state.deletedEntries, collectionIdentity: state.collectionIdentity, collectionJobs: state.collectionJobs, savedArticles: state.savedArticles, articleNotes: state.articleNotes, settings: { ...state.settings, baseUrl: serviceUrl(baseUrl) }, subscriptions: state.subscriptions,
+  return initialState({ researchQueue: state.researchQueue, readLater: state.readLater, deletedEntries: state.deletedEntries, collectionIdentity: state.collectionIdentity, collectionJobs: state.collectionJobs, savedArticles: state.savedArticles, articleNotes: state.articleNotes, settings: { ...state.settings, baseUrl: serviceUrl(baseUrl) }, subscriptions: state.subscriptions,
     favorites: Object.fromEntries(Object.entries(state.favorites).filter(([, bundle]) => bundle.entry.origin === 'local' || bundle.entry.origin === 'vault')),
     cache: Object.fromEntries(Object.entries(state.cache).filter(([, bundle]) => bundle.entry.origin === 'local' || bundle.entry.origin === 'vault')),
     readIds: state.readIds.filter(id => id.startsWith('local-') || id.startsWith('vault:')) });

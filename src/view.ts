@@ -34,6 +34,7 @@ export class ReaderView extends ItemView {
   private restoreObserver?: ResizeObserver;
   private pendingScroll?: { listTop: number; readerTop: number };
   private checkpointTimer?: number;
+  private readLaterSnapshotKey?: string;
   private lastListTop = 0;
   private lastReaderTop = 0;
   private channelKey() { return JSON.stringify([this.plugin.state.settings.baseUrl, this.source]); }
@@ -191,6 +192,7 @@ export class ReaderView extends ItemView {
     return this.plugin.persist().catch(() => undefined);
   }
   reset() {
+    this.readLaterSnapshotKey = undefined;
     if (this.reader) stopMedia(this.reader);
     this.audioDock?.stop();
     this.channelPicker?.close(false); this.stopRestoring();
@@ -326,7 +328,10 @@ export class ReaderView extends ItemView {
       const button = this.filters.createEl('button', { text: value === 'all' ? t('common.all') : t(`platform.${value}`), attr: { 'aria-pressed': String(value === this.platform), 'data-platform': value } });
       button.addEventListener('click', () => { this.platform = value; this.renderFilters(); this.renderList(); });
     }
-    if (!this.collectionScope()) this.addIconButton(this.filters, 'settings', t('reader.pluginSettings'), () => this.plugin.openSettings()).addClass('qrs-settings-button');
+    if (!this.collectionScope()) {
+      this.addIconButton(this.filters, 'list-todo', t('queue.title'), () => this.plugin.openResearchQueue());
+      this.addIconButton(this.filters, 'settings', t('reader.pluginSettings'), () => this.plugin.openSettings()).addClass('qrs-settings-button');
+    }
   }
   private communityScope() { return curatedCommunityChannels(this.plugin.state).some(source => source.id === this.source); }
   private channelChoices(): ChannelChoice[] {
@@ -346,7 +351,7 @@ export class ReaderView extends ItemView {
   refreshPersonalSources(removedSourceIds: string[] = []) {
     if (this.closed || !this.channelButton) return;
     const removed = new Set(removedSourceIds);
-    const available = (entry: Entry) => !removed.has(entry.sourceId) && this.personalEntryAvailable(entry);
+    const available = (entry: Entry) => this.isReadLaterSnapshot(entry) || !removed.has(entry.sourceId) && this.personalEntryAvailable(entry);
     this.entries = this.entries.filter(available);
     if (this.bundle && !available(this.bundle.entry)) {
       ++this.articleVersion; this.bundle = null; this.articleLoading = false; this.message = '';
@@ -358,7 +363,7 @@ export class ReaderView extends ItemView {
       this.collectionItems = [...new Map([...this.collectionItems, ...local].map(item => [item.id, item])).values()].sort((a,b) => b.createdAt - a.createdAt);
       this.renderList();
     }
-    if (removed.has(this.source) || this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source)) { this.selectSource('@local', false, false); return; }
+    if (!this.isReadLaterSnapshot(this.bundle?.entry) && (removed.has(this.source) || this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source))) { this.selectSource('@local', false, false); return; }
     this.renderChannel(); this.renderFilters();
     if (this.personalScope()) this.entries = this.localEntries();
     this.renderList();
@@ -383,6 +388,9 @@ export class ReaderView extends ItemView {
     return new Set(divider ? curatedChannels(this.plugin.state).filter(item => qiaomuChannelDivider(item) === divider).map(item => item.id) : []);
   }
   private personalScope() { return this.source === '@local' || this.source.startsWith('@group:') || this.source.startsWith('local:'); }
+  private isReadLaterSnapshot(entry?: Entry) {
+    return !!entry && !!this.readLaterSnapshotKey && this.plugin.state.readLater[this.readLaterSnapshotKey]?.bundle.entry.id === entry.id;
+  }
   private personalEntryAvailable(entry: Entry) {
     return entry.origin === 'local' ? this.plugin.state.subscriptions.some(feed => feed.id === entry.sourceId)
       : entry.origin !== 'vault' || this.plugin.state.settings.markdownFolders.some(folder => vaultSourceId(folder) === entry.sourceId);
@@ -404,6 +412,7 @@ export class ReaderView extends ItemView {
   }
   private selectSource(source: string, refresh = true, savePrevious = true) {
     if (source === this.source) { if (!refresh) void this.loadEntries(); return; }
+    this.readLaterSnapshotKey = undefined;
     if (savePrevious) this.saveChannel(); this.stopRestoring();
     this.unreadSession.clear();
     this.listVersion++; this.loading = false; this.refreshButton.removeClass('is-loading');
@@ -702,6 +711,7 @@ export class ReaderView extends ItemView {
     if (restoreFocus) this.reader.focus({ preventScroll: true });
   }
   private async openArticle(entry: Entry, resume?: ChannelState) {
+    this.readLaterSnapshotKey = undefined;
     if (this.plugin.articleDeleted(entry)) { new Notice(t('moderation.deleted')); return; }
     this.stopRestoring();
     // Keep this unread reading session navigable after opening marks entries read.
@@ -742,7 +752,8 @@ export class ReaderView extends ItemView {
   }
   /** Opens one article from outside the list, e.g. from Qiaomu Home. */
   openEntry(entry: Entry) { void this.openArticle(entry); }
-  showSavedArticle(bundle: Bundle, mode: Mode) {
+  showSavedArticle(bundle: Bundle, mode: Mode, readLaterKey?: string) {
+    this.readLaterSnapshotKey = readLaterKey;
     if (this.plugin.articleDeleted(bundle.entry)) { new Notice(t('moderation.deleted')); return; }
     this.stopRestoring();
     this.articleVersion++; this.articleLoading = false;
@@ -890,6 +901,13 @@ export class ReaderView extends ItemView {
       })));
       if (this.plugin.canDeleteArticle(bundle.entry)) menu.addSeparator().addItem(item => item.setTitle(t('moderation.delete')).setIcon('trash-2').onClick(() => this.plugin.confirmDeleteArticle(bundle.entry)));
       menu.addSeparator();
+      if (bundle.entry.origin === 'local') {
+        const laterKey = this.plugin.readLaterKey(bundle.entry), later = !!this.plugin.state.readLater[laterKey];
+        menu.addItem(item => item.setTitle(later ? t('queue.remove') : t('queue.later')).setIcon('list-todo').onClick(() => this.run(async () => {
+          if (later) await this.plugin.removeReadLater(laterKey); else await this.plugin.addReadLater(bundle.entry, bundle);
+          new Notice(later ? t('queue.remove') : t('queue.saved'));
+        })));
+      }
       if (savedNote) menu.addItem(item => item.setTitle(t('reader.saveAnotherNote')).setIcon('file-plus').onClick(() => this.saveNote(bundle, mode)));
       menu.addItem(item => item.setTitle(t('reader.saveNoteTo')).setIcon('folder').onClick(() => {
         new NoteLocationModal(this.app, this.plugin.state.settings.articleFolder, exportBaseName(bundle, mode),

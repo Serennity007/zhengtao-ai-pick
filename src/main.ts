@@ -1,6 +1,9 @@
 import { PLUGIN_ID, PLUGIN_NAME, PROJECT_URL } from './identity';
 import { firstRunState } from './first-run';
 import { DOMESTIC_WECHAT_GROUP, domesticWechatSourcesToAdd } from './domestic-wechat';
+import { buildResearchQueue, type QueuePreferences } from './research-queue';
+import { ResearchQueueModal } from './research-queue-modal';
+import { researchQueueSchema } from './model';
 import { CuratedSourcePicker } from './curated-source-picker';
 import { applyCuratedPicks } from './curated-sources';
 import { watchPaneDividers } from "./pane-dividers";
@@ -47,6 +50,8 @@ export default class ZhengtaoPicksPlugin extends Plugin {
   private libraryEdits: Promise<void> = Promise.resolve();
   private saving: Promise<void> = Promise.resolve();
   private dailyNoteWrite: Promise<unknown> = Promise.resolve();
+  private researchWrites: Promise<unknown> = Promise.resolve();
+  private researchModal?: ResearchQueueModal;
   async onload() {
     watchPaneDividers(this);
     this.lastNote = this.app.workspace.getActiveViewOfType(MarkdownView)?.file ?? null;
@@ -85,6 +90,7 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     this.addCommand({ id: 'pick-qiaomu-sources', name: t('pick.title'), callback: () => this.pickCuratedSources() });
     this.addRibbonIcon('telescope', t('cmd.openReader'), () => { void this.openReader(); });
     this.addCommand({ id: 'open-reader', name: t('cmd.openReader'), callback: () => { void this.openReader(); } });
+    this.addCommand({ id: 'open-research-queue', name: t('queue.title'), callback: () => this.openResearchQueue() });
     this.registerInterval(window.setInterval(() => { void this.checkCollectionJobs(); }, 15000));
     void this.checkCollectionJobs();
     this.addSettingTab(new RssSettings(this.app, this));
@@ -142,7 +148,7 @@ export default class ZhengtaoPicksPlugin extends Plugin {
       void this.openSavedArticle(params.article || '', params.mode || 'original').catch(() => new Notice(t('notice.localCopyMissingShort')));
     });
   }
-  onunload() { this.collectionStopped = true; this.labSettings?.close(); this.center?.close(); this.fonts.dispose(); }
+  onunload() { this.collectionStopped = true; this.labSettings?.close(); this.center?.close(); this.researchModal?.close(); this.fonts.dispose(); }
   api(): RssApi {
     return new RssApi(this.state.settings.baseUrl, async url => {
       const response = await requestUrl({ url, method: 'GET', headers: { Accept: 'application/json' }, throw: false });
@@ -300,6 +306,57 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     } catch { new Notice(t('notice.cannotOpenReader')); }
   }
   pickCuratedSources() { new CuratedSourcePicker(this).open(); }
+  openResearchQueue() { this.researchModal?.close(); this.researchModal = new ResearchQueueModal(this); this.researchModal.open(); }
+  getResearchQueue() { return buildResearchQueue(this.state.subscriptions.flatMap(feed => feed.entries), this.state.researchQueue, this.state.readIds); }
+  readLaterKey(entry: Entry) { return `${entry.origin === 'local' ? 'local' : entry.origin === 'vault' ? 'vault' : this.state.settings.baseUrl}|${entry.id}`; }
+  private editResearch<T>(edit: () => T): Promise<T> {
+    const operation = this.researchWrites.catch(() => undefined).then(async () => {
+      const previous = { researchQueue: this.state.researchQueue, readLater: this.state.readLater };
+      try { const result = edit(); await this.persist(); return result; }
+      catch (error) { Object.assign(this.state, previous); throw error; }
+    });
+    this.researchWrites = operation; return operation;
+  }
+  setResearchQueue(preferences: QueuePreferences) {
+    const parsed = researchQueueSchema.parse(preferences);
+    return this.editResearch(() => { this.state.researchQueue = parsed; });
+  }
+  addReadLater(entry: Entry, bundle?: Bundle): Promise<boolean> {
+    if (entry.origin !== 'local') return Promise.reject(new Error(t('queue.personalOnly')));
+    const key = this.readLaterKey(entry);
+    return this.editResearch(() => {
+      if (this.state.readLater[key]) return false;
+      const snapshot = bundle ?? this.state.cache[entry.id] ?? this.state.favorites[entry.id] ?? { entry, rewrite: entry.rewrite ?? null, translation: null, fetchedAt: Date.now() };
+      this.state.readLater = { ...this.state.readLater, [key]: { bundle: structuredClone(snapshot), savedAt: Date.now() } }; return true;
+    });
+  }
+  removeReadLater(key: string) {
+    return this.editResearch(() => { const next = { ...this.state.readLater }; delete next[key]; this.state.readLater = next; });
+  }
+  async openResearchArticle(entry: Entry, savedBundle?: Bundle) {
+    if (savedBundle) {
+      if (savedBundle.entry.origin !== 'local') throw new Error(t('queue.personalOnly'));
+      const candidateKey = this.readLaterKey(savedBundle.entry), savedKey = this.state.readLater[candidateKey] ? candidateKey : undefined;
+      if (this.state.subscriptions.some(feed => feed.id === entry.sourceId)) await this.openPersonalSource(entry.sourceId);
+      else await this.openReader();
+      const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+      if (view instanceof ReaderView) {
+        this.state.readIds = [...new Set([...this.state.readIds, entry.id])].slice(-5000);
+        view.showSavedArticle(savedBundle, 'original', savedKey); await this.persist();
+      }
+      return;
+    }
+    if (this.state.subscriptions.some(feed => feed.id === entry.sourceId)) await this.openPersonalSource(entry.sourceId);
+    else await this.openReader();
+    const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+    if (view instanceof ReaderView) view.openEntry(entry);
+  }
+  async refreshResearchQueue(doc: Document) {
+    const ids = [...this.state.subscriptions].sort((a, b) => (a.lastAttemptAt || a.updatedAt) - (b.lastAttemptAt || b.updatedAt)).slice(0, 20).map(feed => feed.id);
+    await this.subscriptions.refresh(ids, doc, true);
+    const failed = this.state.subscriptions.filter(feed => ids.includes(feed.id) && feed.error).length;
+    if (failed) new Notice(t('reader.refreshFailed', { n: failed }));
+  }
   async addDomesticWechat(): Promise<number> {
     return this.subscriptions.import(domesticWechatSourcesToAdd(this.state.subscriptions));
   }

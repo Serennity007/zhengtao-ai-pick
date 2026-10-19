@@ -732,3 +732,30 @@ body:has(.workspace-leaf.mod-active > .workspace-leaf-content:is(
   .qrs-pick-row { grid-template-columns: 18px minmax(0, 1fr); }
   .qrs-pick-badge { grid-column: 2; margin-top: 0; }
 }
+
+.modal.qrs-research-modal { width: min(780px, calc(100vw - 32px)); }
+.qrs-research { display: flex; flex-direction: column; gap: 12px; }
+.qrs-research-description { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.qrs-research-tabs { display: flex; gap: 8px; }
+.qrs-research-tabs button { flex: 1; }
+.qrs-research-tabs button[aria-selected="true"] { color: var(--text-accent); box-shadow: inset 0 -2px var(--interactive-accent); }
+.qrs-research-rules { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+.qrs-research-rules[hidden], .qrs-research-refresh[hidden] { display: none; }
+.qrs-research-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12px; color: var(--text-muted); }
+.qrs-research-field textarea { width: 100%; min-height: 54px; resize: vertical; }
+.qrs-research-field select, .qrs-research-field input { width: 100%; }
+.qrs-research-numbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.qrs-research-rules > button { justify-self: end; }
+.qrs-research-status { color: var(--text-muted); font-size: 12px; }
+.qrs-research-status:empty { display: none; }
+.qrs-research-list { display: flex; flex-direction: column; gap: 10px; }
+.qrs-research-card { padding: 12px; border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+.qrs-research-card h3 { margin: 0 0 6px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.qrs-research-meta, .qrs-research-reason { margin: 4px 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.qrs-research-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.qrs-research-actions button { font-size: 12px; }
+.qrs-research-empty { margin: 12px 0; padding: 12px; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.qrs-research-refresh { align-self: start; }
+@media (max-width: 480px) {
+  .qrs-research-numbers { grid-template-columns: 1fr; gap: 8px; }
+}
