@@ -2,7 +2,8 @@ import { normalizePath, TFolder, type App, type TFile } from 'obsidian';
 import { articleExportBody, articleExportMarkdown, exportBaseName } from './article-export';
 import { folderPath, type Bundle, type Mode } from './model';
 import type { LocalImages } from './images';
-import { fail } from './i18n';
+import { fail, t } from './i18n';
+import { researchCardMarkdown, type ResearchCardOptions } from './research-card';
 
 const imageTypes: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif' };
 
@@ -41,12 +42,13 @@ export function linkAttachments(markdown: string, links: Map<string, string>): s
 }
 
 // Saves into the vault through Obsidian's own APIs, so it works on mobile and follows the user's attachment and link settings.
-export async function saveArticleToVault(app: App, bundle: Bundle, mode: Mode, doc: Document, images: LocalImages, includeImages: boolean, folderSetting: string): Promise<{ file: TFile; missingImages: number }> {
+export async function saveArticleToVault(app: App, bundle: Bundle, mode: Mode, doc: Document, images: LocalImages, includeImages: boolean, folderSetting: string, research?: ResearchCardOptions): Promise<{ file: TFile; missingImages: number }> {
   const body = bundle.entry.origin === 'vault' ? null : articleExportBody(bundle, mode, doc, includeImages);
   if (!articleExportMarkdown(bundle, mode, body)) fail('error.noExportableContent');
   const folder = articleFolderPath(folderSetting);
   await ensureFolder(app, folder);
-  const name = exportBaseName(bundle, mode), path = availableNotePath(p => !!app.vault.getAbstractFileByPath(p), folder, name);
+  const name = `${research ? `${t('card.filePrefix')} - ` : ''}${exportBaseName(bundle, mode)}`;
+  const path = availableNotePath(p => !!app.vault.getAbstractFileByPath(p), folder, name);
   const links = new Map<string, string>(), created: TFile[] = [];
   let missingImages = 0;
   try {
@@ -62,7 +64,8 @@ export async function saveArticleToVault(app: App, bundle: Bundle, mode: Mode, d
     }
     const markdown = articleExportMarkdown(bundle, mode, body);
     if (!markdown) fail('error.noExportableContent');
-    return { file: await app.vault.create(path, linkAttachments(markdown, links)), missingImages };
+    const reading = linkAttachments(markdown, links);
+    return { file: await app.vault.create(path, research ? researchCardMarkdown(bundle, mode, reading, research) : reading), missingImages };
   } catch (error) {
     // A failed save leaves no orphaned images behind; the user's trash setting decides where they go.
     for (const file of created) await app.fileManager.trashFile(file).catch(() => undefined);

@@ -16,7 +16,7 @@ import { MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile, 
 import { requestUrl } from 'obsidian';
 import { RssApi } from './api';
 import { folderPath, initialState, renameArticleNotes, modeLabel, modeSchema, readingFontSchema, readingThemeSchema, type Bundle, type Entry, type Mode, type State } from './model';
-import { cleanCaptureMarkers, repairArticleLinks, appendDailyNoteLink, captureMoment, dailyNotePath, readDailyNoteSettings, renderDailyNoteTemplate } from './daily-note';
+import { articleNoteUrl, cleanCaptureMarkers, repairArticleLinks, appendDailyNoteLink, captureMoment, dailyNotePath, readDailyNoteSettings, renderDailyNoteTemplate } from './daily-note';
 import { ReaderView, VIEW_TYPE } from './view';
 import { contextProvider } from './agent-bridge';
 import { createHomeProvider } from './home';
@@ -51,6 +51,7 @@ export default class ZhengtaoPicksPlugin extends Plugin {
   private saving: Promise<void> = Promise.resolve();
   private dailyNoteWrite: Promise<unknown> = Promise.resolve();
   private researchWrites: Promise<unknown> = Promise.resolve();
+  private researchCardWrites: Promise<unknown> = Promise.resolve();
   private researchModal?: ResearchQueueModal;
   async onload() {
     watchPaneDividers(this);
@@ -91,6 +92,12 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     this.addRibbonIcon('telescope', t('cmd.openReader'), () => { void this.openReader(); });
     this.addCommand({ id: 'open-reader', name: t('cmd.openReader'), callback: () => { void this.openReader(); } });
     this.addCommand({ id: 'open-research-queue', name: t('queue.title'), callback: () => this.openResearchQueue() });
+    this.addCommand({ id: 'save-research-card', name: t('card.save'), checkCallback: checking => {
+      const view = this.app.workspace.getActiveViewOfType(ReaderView);
+      if (!view?.canSaveResearchCard()) return false;
+      if (!checking) view.saveCurrentResearchCard();
+      return true;
+    } });
     this.registerInterval(window.setInterval(() => { void this.checkCollectionJobs(); }, 15000));
     void this.checkCollectionJobs();
     this.addSettingTab(new RssSettings(this.app, this));
@@ -342,7 +349,7 @@ export default class ZhengtaoPicksPlugin extends Plugin {
       const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
       if (view instanceof ReaderView) {
         this.state.readIds = [...new Set([...this.state.readIds, entry.id])].slice(-5000);
-        view.showSavedArticle(savedBundle, 'original', savedKey); await this.persist();
+        view.showSavedArticle(savedBundle, 'original', savedKey ? { store: 'readLater', key: savedKey } : undefined); await this.persist();
       }
       return;
     }
@@ -406,7 +413,23 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     await this.openReader();
     const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
     if (!(view instanceof ReaderView)) throw new Error('Reader unavailable');
-    view.showSavedArticle(bundle, modeSchema.catch('original').parse(mode));
+    view.showSavedArticle(bundle, modeSchema.catch('original').parse(mode), { store: 'savedArticles', key: id });
+  }
+  writeResearchCard<T>(write: () => Promise<T>): Promise<T> {
+    const operation = this.researchCardWrites.catch(() => undefined).then(write);
+    this.researchCardWrites = operation; return operation;
+  }
+  async ensureResearchSnapshot(bundle: Bundle, mode: Mode, key = this.readLaterKey(bundle.entry)): Promise<string> {
+    const previous = this.state.savedArticles[key], snapshot = structuredClone(bundle);
+    this.state.savedArticles[key] = snapshot;
+    try { await this.persist(); }
+    catch (error) {
+      if (this.state.savedArticles[key] === snapshot) {
+        if (previous) this.state.savedArticles[key] = previous; else delete this.state.savedArticles[key];
+      }
+      throw error;
+    }
+    return articleNoteUrl({ vault: this.app.vault.getName(), article: key, mode });
   }
   private cleanNoteMarkers(file: TFile) {
     this.dailyNoteWrite = this.dailyNoteWrite.catch(() => undefined).then(async () => {

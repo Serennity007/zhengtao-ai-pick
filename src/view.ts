@@ -27,16 +27,20 @@ import { dividerLabel, relativeTime, t } from './i18n';
 import { agentAvailable, articleSnapshot, askAgent } from './agent-bridge';
 import { notifyContextChanged, type ContextSnapshot } from './qiaomu-context';
 import { groupPaperEntries } from './paper-groups';
+import { parseQueueKeywords } from './research-queue';
+import type { ResearchCardOptions } from './research-card';
 import { fontName } from './fonts';
 export const VIEW_TYPE = READER_VIEW_TYPE;
 type Filter = 'all' | 'unread' | 'favorites';
+type SavedSnapshot = { store: 'readLater' | 'savedArticles'; key: string };
 export class ReaderView extends ItemView {
   private channelPicker?: ChannelPicker;
   private restoreObserver?: ResizeObserver;
   private pendingScroll?: { listTop: number; readerTop: number };
   private checkpointTimer?: number;
-  private readLaterSnapshotKey?: string;
+  private savedSnapshot?: SavedSnapshot;
   private paperGroupsOpen = new Set<string>();
+  private cardSaving = false;
   private lastListTop = 0;
   private lastReaderTop = 0;
   private channelKey() { return JSON.stringify([this.plugin.state.settings.baseUrl, this.source]); }
@@ -194,7 +198,7 @@ export class ReaderView extends ItemView {
     return this.plugin.persist().catch(() => undefined);
   }
   reset() {
-    this.readLaterSnapshotKey = undefined;
+    this.savedSnapshot = undefined;
     if (this.reader) stopMedia(this.reader);
     this.audioDock?.stop();
     this.channelPicker?.close(false); this.stopRestoring();
@@ -225,10 +229,45 @@ export class ReaderView extends ItemView {
   private saveNote(bundle: Bundle, mode: Mode) {
     this.run(() => this.saveNoteAt(bundle, mode, this.plugin.state.settings.articleFolder));
   }
-  private async saveNoteAt(bundle: Bundle, mode: Mode, folder: string, remember = false): Promise<void> {
+  private researchArticleIdentity(entry: Entry): string {
+    return this.savedSnapshot?.store === 'savedArticles' && this.isPinnedSnapshot(entry)
+      ? this.savedSnapshot.key : this.plugin.readLaterKey(entry);
+  }
+  private savedResearchCard(bundle: Bundle, mode: Mode, identity = this.researchArticleIdentity(bundle.entry)): TFile | null {
+    const path = this.plugin.state.articleNotes[`research|${articleNoteKey(identity, mode)}`];
+    const file = path ? this.app.vault.getAbstractFileByPath(path) : null;
+    return file instanceof TFile ? file : null;
+  }
+  canSaveResearchCard() { return !!this.bundle && !this.articleLoading && !this.cardSaving; }
+  saveCurrentResearchCard() {
+    if (!this.canSaveResearchCard()) return;
+    const bundle = this.bundle!, mode = this.mode, identity = this.researchArticleIdentity(bundle.entry);
+    this.cardSaving = true;
+    const root = this.plugin.state.settings.articleFolder.replace(/\/+$/, ''), folder = `${root ? root + '/' : ''}科研卡片`;
+    this.run(async () => {
+      try {
+        await this.plugin.writeResearchCard(async () => {
+          const saved = this.savedResearchCard(bundle, mode, identity);
+          if (saved) { await this.app.workspace.getLeaf('tab').openFile(saved); return; }
+          await this.saveNoteAt(bundle, mode, folder, false, true, identity);
+        });
+      }
+      finally { this.cardSaving = false; }
+    });
+  }
+  private async saveNoteAt(bundle: Bundle, mode: Mode, folder: string, remember = false, research = false, articleIdentity?: string): Promise<void> {
+    const identity = research ? articleIdentity ?? this.researchArticleIdentity(bundle.entry) : bundle.entry.id;
+    let options: ResearchCardOptions | undefined;
+    if (research) {
+      const text = [bundle.entry.title, bundle.entry.titleZh, bundle.entry.summary, bundle.entry.summaryZh].filter(Boolean).join(' ').toLowerCase();
+      options = { sourceName: this.sourceName(bundle.entry), createdAt: Date.now(),
+        topics: parseQueueKeywords(this.plugin.state.researchQueue.keywords).filter(word => text.includes(word.toLowerCase())),
+        backlink: '', vaultName: this.app.vault.getName() };
+      options.backlink = await this.plugin.ensureResearchSnapshot(bundle, mode, identity);
+    }
     const state = this.plugin.state, progress = new Notice(t('notice.savingArticle'), 0);
-    const { file, missingImages } = await saveArticleToVault(this.app, bundle, mode, this.contentEl.ownerDocument, this.plugin.images, state.settings.remoteImages, folder).finally(() => progress.hide());
-    state.articleNotes[articleNoteKey(bundle.entry.id, mode)] = file.path;
+    const { file, missingImages } = await saveArticleToVault(this.app, bundle, mode, this.contentEl.ownerDocument, this.plugin.images, state.settings.remoteImages, folder, options).finally(() => progress.hide());
+    state.articleNotes[`${research ? 'research|' : ''}${articleNoteKey(identity, mode)}`] = file.path;
     if (remember) state.settings.articleFolder = folder;
     // The note already exists. A settings failure must not send the save
     // dialog back through file creation (and create a duplicate on retry).
@@ -353,7 +392,7 @@ export class ReaderView extends ItemView {
   refreshPersonalSources(removedSourceIds: string[] = []) {
     if (this.closed || !this.channelButton) return;
     const removed = new Set(removedSourceIds);
-    const available = (entry: Entry) => this.isReadLaterSnapshot(entry) || !removed.has(entry.sourceId) && this.personalEntryAvailable(entry);
+    const available = (entry: Entry) => this.isPinnedSnapshot(entry) || !removed.has(entry.sourceId) && this.personalEntryAvailable(entry);
     this.entries = this.entries.filter(available);
     if (this.bundle && !available(this.bundle.entry)) {
       ++this.articleVersion; this.bundle = null; this.articleLoading = false; this.message = '';
@@ -365,7 +404,7 @@ export class ReaderView extends ItemView {
       this.collectionItems = [...new Map([...this.collectionItems, ...local].map(item => [item.id, item])).values()].sort((a,b) => b.createdAt - a.createdAt);
       this.renderList();
     }
-    if (!this.isReadLaterSnapshot(this.bundle?.entry) && (removed.has(this.source) || this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source))) { this.selectSource('@local', false, false); return; }
+    if (!this.isPinnedSnapshot(this.bundle?.entry) && (removed.has(this.source) || this.source.startsWith('@group:') && !this.plugin.state.subscriptionGroups.some(g => g.id === this.source.slice(7)) || (this.source.startsWith('local:') || this.vaultScope()) && !personalSources(this.plugin.state).some(s => s.id === this.source))) { this.selectSource('@local', false, false); return; }
     this.renderChannel(); this.renderFilters();
     if (this.personalScope()) this.entries = this.localEntries();
     this.renderList();
@@ -390,8 +429,24 @@ export class ReaderView extends ItemView {
     return new Set(divider ? curatedChannels(this.plugin.state).filter(item => qiaomuChannelDivider(item) === divider).map(item => item.id) : []);
   }
   private personalScope() { return this.source === '@local' || this.source.startsWith('@group:') || this.source.startsWith('local:'); }
-  private isReadLaterSnapshot(entry?: Entry) {
-    return !!entry && !!this.readLaterSnapshotKey && this.plugin.state.readLater[this.readLaterSnapshotKey]?.bundle.entry.id === entry.id;
+  private isPinnedSnapshot(entry?: Entry) {
+    if (!entry || !this.savedSnapshot) return false;
+    const { store, key } = this.savedSnapshot;
+    const bundle = store === 'readLater' ? this.plugin.state.readLater[key]?.bundle : this.plugin.state.savedArticles[key];
+    return bundle?.entry.id === entry.id;
+  }
+  private canReloadArticle(entry: Entry) {
+    return entry.origin === 'local' || entry.origin === 'vault' || !this.isPinnedSnapshot(entry)
+      || this.savedSnapshot?.store !== 'savedArticles' || this.savedSnapshot.key === this.plugin.readLaterKey(entry);
+  }
+  private async reloadArticle(entry: Entry) {
+    if (!this.canReloadArticle(entry)) return;
+    const version = this.articleVersion, baseUrl = this.plugin.state.settings.baseUrl;
+    if (entry.origin !== 'local' && entry.origin !== 'vault') {
+      try { await this.plugin.syncDeletedArticles(); } catch { /* Preserve cached reading when the service is offline. */ }
+      if (baseUrl !== this.plugin.state.settings.baseUrl) return;
+    }
+    if (!this.closed && version === this.articleVersion && this.canReloadArticle(entry) && !this.plugin.articleDeleted(entry)) await this.openArticle(entry);
   }
   private personalEntryAvailable(entry: Entry) {
     return entry.origin === 'local' ? this.plugin.state.subscriptions.some(feed => feed.id === entry.sourceId)
@@ -414,7 +469,7 @@ export class ReaderView extends ItemView {
   }
   private selectSource(source: string, refresh = true, savePrevious = true) {
     if (source === this.source) { if (!refresh) void this.loadEntries(); return; }
-    this.readLaterSnapshotKey = undefined;
+    this.savedSnapshot = undefined;
     if (savePrevious) this.saveChannel(); this.stopRestoring();
     this.unreadSession.clear();
     this.listVersion++; this.loading = false; this.refreshButton.removeClass('is-loading');
@@ -723,7 +778,7 @@ export class ReaderView extends ItemView {
     if (restoreFocus) this.reader.focus({ preventScroll: true });
   }
   private async openArticle(entry: Entry, resume?: ChannelState) {
-    this.readLaterSnapshotKey = undefined;
+    this.savedSnapshot = undefined;
     if (this.plugin.articleDeleted(entry)) { new Notice(t('moderation.deleted')); return; }
     this.stopRestoring();
     // Keep this unread reading session navigable after opening marks entries read.
@@ -764,9 +819,9 @@ export class ReaderView extends ItemView {
   }
   /** Opens one article from outside the list, e.g. from Qiaomu Home. */
   openEntry(entry: Entry) { void this.openArticle(entry); }
-  showSavedArticle(bundle: Bundle, mode: Mode, readLaterKey?: string) {
-    this.readLaterSnapshotKey = readLaterKey;
+  showSavedArticle(bundle: Bundle, mode: Mode, savedSnapshot?: SavedSnapshot) {
     if (this.plugin.articleDeleted(bundle.entry)) { new Notice(t('moderation.deleted')); return; }
+    this.savedSnapshot = savedSnapshot;
     this.stopRestoring();
     this.articleVersion++; this.articleLoading = false;
     this.bundle = bundle; this.mode = mode; this.message = ''; this.audioDock?.open(bundle.entry);
@@ -907,10 +962,8 @@ export class ReaderView extends ItemView {
       if (link) menu.addItem(item => item.setTitle(t('reader.openOriginal')).setIcon('external-link').onClick(() => { this.contentEl.win.open(link, '_blank', 'noopener,noreferrer'); }));
       const video = safeUrl(bundle.entry.videoUrl || '');
       if (video && videoEmbedUrl(video)) menu.addItem(item => item.setTitle(t('reader.openVideo')).setIcon('video').onClick(() => { this.contentEl.win.open(video, '_blank', 'noopener,noreferrer'); }));
-      menu.addItem(item => item.setTitle(t('reader.reloadArticle')).setIcon('refresh-cw').onClick(() => this.run(async () => {
-        try { await this.plugin.syncDeletedArticles(); } catch { /* Preserve cached reading when the service is offline. */ }
-        if (!this.plugin.articleDeleted(bundle.entry)) await this.openArticle(bundle.entry);
-      })));
+      menu.addItem(item => item.setTitle(t('reader.reloadArticle')).setIcon('refresh-cw').setDisabled(!this.canReloadArticle(bundle.entry))
+        .onClick(() => this.run(() => this.reloadArticle(bundle.entry))));
       if (this.plugin.canDeleteArticle(bundle.entry)) menu.addSeparator().addItem(item => item.setTitle(t('moderation.delete')).setIcon('trash-2').onClick(() => this.plugin.confirmDeleteArticle(bundle.entry)));
       menu.addSeparator();
       if (bundle.entry.origin === 'local') {
@@ -921,6 +974,9 @@ export class ReaderView extends ItemView {
         })));
       }
       if (savedNote) menu.addItem(item => item.setTitle(t('reader.saveAnotherNote')).setIcon('file-plus').onClick(() => this.saveNote(bundle, mode)));
+      const savedCard = this.savedResearchCard(bundle, mode);
+      menu.addItem(item => item.setTitle(savedCard ? t('card.open') : t('card.save')).setIcon('notebook-pen')
+        .setDisabled(this.articleLoading || this.cardSaving).onClick(() => this.saveCurrentResearchCard()));
       menu.addItem(item => item.setTitle(t('reader.saveNoteTo')).setIcon('folder').onClick(() => {
         new NoteLocationModal(this.app, this.plugin.state.settings.articleFolder, exportBaseName(bundle, mode),
           (folder, remember) => this.saveNoteAt(bundle, mode, folder, remember)).open();
