@@ -26,6 +26,7 @@ import { articleNoteKey, modeLabel, modeSchema, podcastDefaultMode, readingFontS
 import { dividerLabel, relativeTime, t } from './i18n';
 import { agentAvailable, articleSnapshot, askAgent } from './agent-bridge';
 import { notifyContextChanged, type ContextSnapshot } from './qiaomu-context';
+import { groupPaperEntries } from './paper-groups';
 import { fontName } from './fonts';
 export const VIEW_TYPE = READER_VIEW_TYPE;
 type Filter = 'all' | 'unread' | 'favorites';
@@ -35,6 +36,7 @@ export class ReaderView extends ItemView {
   private pendingScroll?: { listTop: number; readerTop: number };
   private checkpointTimer?: number;
   private readLaterSnapshotKey?: string;
+  private paperGroupsOpen = new Set<string>();
   private lastListTop = 0;
   private lastReaderTop = 0;
   private channelKey() { return JSON.stringify([this.plugin.state.settings.baseUrl, this.source]); }
@@ -673,10 +675,19 @@ export class ReaderView extends ItemView {
     if (!entries.length) this.list.createDiv({ cls: 'qrs-empty', text: this.loading ? t('reader.loadingEntries') : this.filter === 'favorites' ? t('reader.emptyFavorites') : this.personalScope() && !this.entries.length ? t('reader.emptyPersonal') : t('reader.emptyFilter') });
     // Inside one channel every row would repeat the same source name, so it only appears when sources mix.
     const mixed = new Set(entries.map(entry => entry.sourceId)).size > 1;
-    for (const entry of (this.personalScope() ? entries.slice(0, this.personalLimit) : entries)) {
+    for (const group of groupPaperEntries(this.personalScope() ? entries.slice(0, this.personalLimit) : entries)) {
+      let parent = this.list;
+      if (group.kind === 'paper') {
+        const details = this.list.createEl('details', { cls: 'qrs-paper-group', attr: { 'data-paper-key': group.paper.key } });
+        details.open = this.paperGroupsOpen.has(group.paper.key) || group.entries.some(entry => entry.id === this.bundle?.entry.id);
+        details.createEl('summary', { text: `${t('paper.same', { n: group.entries.length })} · ${group.paper.id}` });
+        details.ontoggle = () => { if (details.open) this.paperGroupsOpen.add(group.paper.key); else this.paperGroupsOpen.delete(group.paper.key); };
+        parent = details;
+      }
+      for (const entry of (group.kind === 'paper' ? group.entries : [group.entry])) {
       const relatedIds = this.relatedContentIds(entry);
       const read = relatedIds.some(id => this.plugin.state.readIds.includes(id));
-      const row = this.list.createEl('button', { cls: 'qrs-entry', attr: { 'data-entry-id': entry.id } });
+      const row = parent.createEl('button', { cls: 'qrs-entry', attr: { 'data-entry-id': entry.id } });
       row.toggleClass('qrs-selected', this.bundle?.entry.id === entry.id);
       row.setAttribute('aria-pressed', String(this.bundle?.entry.id === entry.id)); row.toggleClass('qrs-read', read);
       const copy = row.createSpan('qrs-entry-copy');
@@ -701,6 +712,7 @@ export class ReaderView extends ItemView {
       const summary = this.excerpt(entry); if (summary) copy.createEl('p', { text: summary, cls: 'qrs-summary' }); else row.addClass('qrs-no-summary');
       this.renderThumbnail(row, entry);
       row.addEventListener('click', () => { void this.openArticle(entry); });
+      }
     }
     if (this.personalScope() && entries.length > this.personalLimit) this.list.createEl('button', { text: t('reader.showMoreArticles'), cls: 'qrs-more' }).onclick = () => { this.personalLimit += 100; this.renderList(); };
     if (this.hasMore && this.filter !== 'favorites') {

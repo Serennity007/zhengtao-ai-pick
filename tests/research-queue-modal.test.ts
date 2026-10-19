@@ -212,4 +212,25 @@ describe('research queue modal interaction', () => {
     expect(modal.contentEl.querySelector('img')).toBeNull();
     expect(cards(modal)[0].querySelector('h3')!.textContent).toContain('<img');
   });
+
+  it('groups two interpretations in selected reading but preserves separate read-later snapshots and original reading actions', () => {
+    const p = plugin();
+    const a = { ...first, link: 'https://arxiv.org/abs/2601.12345v1' };
+    const b: Entry = { ...first, id: 'second-interpretation', sourceId: 'second', title: 'Agent Memory 另一份解读', link: 'https://arxiv.org/pdf/2601.12345v2.pdf' };
+    p.state.subscriptions[0].entries = [a];
+    p.state.subscriptions.push({ ...p.state.subscriptions[0], id: 'second', name: '另一公众号', url: 'https://second.example.org/rss', entries: [b] });
+    p.state.readLater[key(a)] = { bundle: snapshot(a), savedAt: now - 1 };
+    p.state.readLater[key(b)] = { bundle: snapshot(b), savedAt: now };
+    const modal = open(p), group = modal.contentEl.querySelector<HTMLDetailsElement>('details.qrs-paper-group')!;
+    expect(group).not.toBeNull(); expect(group.querySelectorAll('article')).toHaveLength(2);
+    expect(group.querySelectorAll('button')).toHaveLength(4);
+    expect(cards(modal).map(card => card.querySelector('h3')!.textContent)).toEqual([a.title, b.title]);
+    button(modal, '阅读', cards(modal)[0]).click();
+    expect(p.openResearchArticle).toHaveBeenLastCalledWith(a, undefined);
+    const reopened = open(p); button(reopened, '稍后读').click();
+    expect(reopened.contentEl.querySelector('details.qrs-paper-group')).toBeNull();
+    expect(cards(reopened).map(card => card.querySelector('h3')!.textContent)).toEqual([b.title, a.title]);
+    button(reopened, '阅读', cards(reopened)[0]).click();
+    expect(p.openResearchArticle).toHaveBeenLastCalledWith(b, p.state.readLater[key(b)].bundle);
+  });
 });

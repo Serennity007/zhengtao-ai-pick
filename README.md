@@ -1,12 +1,13 @@
 # 正涛精选 · Zhengtao AI Pick
 
-面向科研阅读的 Obsidian 插件，整合完整 RSS 阅读器、23 个科研订阅源与 9 个国内公众号精选。当前整合版为 **1.5.0**，插件 ID 为 **`zhengtao-ai-pick`**，可与乔木插件分别安装。
+面向科研阅读的 Obsidian 插件，整合完整 RSS 阅读器、23 个科研订阅源与 9 个国内公众号精选。当前整合版为 **1.6.0**，插件 ID 为 **`zhengtao-ai-pick`**，可与乔木插件分别安装。
 
 本项目基于 [Qiaomu AI RSS](https://github.com/joeseesun/qiaomu-ai-rss)，原作者为向阳乔木（[@joeseesun](https://github.com/joeseesun)），沿用 **GPL-3.0-only**。独立化改动见 [FORK.md](FORK.md)。
 
 ## 功能
 
 - **专题阅读队列**：按研究关键词、排除词和最近天数筛选缓存中的未读文章，限制总数及每个来源的数量；内置多智能体记忆、Agent 工作流、长期规划专题，可自定义。稍后读单独保存正文快照。见 [科研阅读流程](docs/RESEARCH-WORKFLOW.md)。
+- **同论文聚合**：阅读列表及今日队列按明确的 arXiv ID／DOI 折叠同一论文的不同文章，保留每篇原文、来源和独立已读状态；不凭相似标题合并。
 - **科研订阅**：内置 arXiv cs.MA、LLM Agents、Agent Memory，以及 Zep、Lilian Weng、Simon Willison 等 23 个公开源。初装置顶「多智能体与 Agent 记忆」「Agent 研究与工程」两个分组。
 - **国内公众号精选**：PaperWeekly、AINLP、机器之心、AI 大模型应用实践、AI 科技评论、Datawhale、PaperAgent、夕小瑶科技说、新智元。首次安装加入「国内公众号精选」分组；已有用户可在探索页点击「添加国内精选」，或运行同名命令批量补充。已订阅账号保留原名称和分组，不重复添加已知旧地址。
 - **个人订阅管理**：添加 RSS / Atom、分组、重命名、取消订阅、OPML 导入与导出；分组可置顶为顶层频道，最多 50 个。
@@ -19,7 +20,7 @@
 
 ## 安装
 
-需要 Obsidian **1.13.0 或更新版本**。当前整合版为 1.5.0，源码可从本仓库获取；尚未发布到 Releases 或 Obsidian 社区插件目录。
+需要 Obsidian **1.13.0 或更新版本**。当前整合版为 1.6.0，源码可从本仓库获取；尚未发布到 Releases 或 Obsidian 社区插件目录。
 
 已有本地安装包时，可直接使用其中构建好的三件套。也可以从仓库构建：
 

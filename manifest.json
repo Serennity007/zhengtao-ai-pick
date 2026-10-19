@@ -1,7 +1,7 @@
 {
   "id": "zhengtao-ai-pick",
   "name": "正涛精选",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "minAppVersion": "1.13.0",
   "description": "独立科研 RSS 阅读器：Agent 记忆研究、国内公众号精选、分组订阅、收藏摘录与笔记归档。基于 Qiaomu AI RSS（GPL-3.0-only）。",
   "author": "正涛 (Serennity007)",

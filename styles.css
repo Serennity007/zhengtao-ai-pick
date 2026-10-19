@@ -759,3 +759,8 @@ body:has(.workspace-leaf.mod-active > .workspace-leaf-content:is(
 @media (max-width: 480px) {
   .qrs-research-numbers { grid-template-columns: 1fr; gap: 8px; }
 }
+.qrs-paper-group { border: 1px solid var(--background-modifier-border); border-radius: 8px; margin: 8px 0; overflow: hidden; }
+.qrs-paper-group > summary { padding: 10px; font-size: 12px; line-height: 1.5; cursor: pointer; color: var(--text-muted); overflow-wrap: anywhere; }
+.qrs-paper-group > summary:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+.qrs-paper-group > .qrs-entry { border-radius: 0; }
+.qrs-research .qrs-paper-group > .qrs-research-card { margin: 8px; }

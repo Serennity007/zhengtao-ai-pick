@@ -3,11 +3,13 @@ import type ZhengtaoPicksPlugin from './main';
 import { titleOf, type Bundle, type Entry } from './model';
 import { researchTopics, type QueuePreferences } from './research-queue';
 import { t } from './i18n';
+import { groupPaperEntries } from './paper-groups';
 
 export class ResearchQueueModal extends Modal {
   private closed = true;
   private generation = 0;
   private busy = false;
+  private paperGroupsOpen = new Set<string>();
   private tab: 'today' | 'later' = 'today';
   private rules!: HTMLFormElement;
   private list!: HTMLElement;
@@ -97,13 +99,23 @@ export class ResearchQueueModal extends Modal {
       if (!items.length) this.list.createEl('p', { cls: 'qrs-research-empty', text: t('queue.emptyLater') });
     } else {
       const items = this.plugin.getResearchQueue();
-      for (const item of items) this.renderCard(item.entry, item.matched);
+      const matched = new Map(items.map(item => [item.entry.id, item.matched]));
+      for (const group of groupPaperEntries(items.map(item => item.entry))) {
+        if (group.kind === 'article') this.renderCard(group.entry, matched.get(group.entry.id) || []);
+        else {
+          const details = this.list.createEl('details', { cls: 'qrs-paper-group', attr: { 'data-paper-key': group.paper.key } });
+          details.open = this.paperGroupsOpen.has(group.paper.key);
+          details.createEl('summary', { text: `${t('paper.same', { n: group.entries.length })} · ${group.paper.id}` });
+          details.ontoggle = () => { if (details.open) this.paperGroupsOpen.add(group.paper.key); else this.paperGroupsOpen.delete(group.paper.key); };
+          for (const entry of group.entries) this.renderCard(entry, matched.get(entry.id) || [], undefined, undefined, details);
+        }
+      }
       if (!items.length) this.list.createEl('p', { cls: 'qrs-research-empty', text: t('queue.empty') });
     }
   }
 
-  private renderCard(entry: Entry, matched: string[], savedKey?: string, savedBundle?: Bundle) {
-    const card = this.list.createEl('article', { cls: 'qrs-research-card' });
+  private renderCard(entry: Entry, matched: string[], savedKey?: string, savedBundle?: Bundle, parent = this.list) {
+    const card = parent.createEl('article', { cls: 'qrs-research-card' });
     card.createEl('h3', { text: titleOf(entry) });
     const source = this.plugin.state.subscriptions.find(feed => feed.id === entry.sourceId)?.name || entry.sourceName || entry.sourceId;
     const date = entry.publishedTs && Number.isFinite(entry.publishedTs)

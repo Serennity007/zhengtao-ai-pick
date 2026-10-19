@@ -17,6 +17,7 @@ export function locale(): Locale {
 // Columns: key, 简体中文, English, 繁體中文, 日本語, 한국어, Español, Français, Deutsch
 // Exported so tests can assert that every message has all eight translations.
 export const M = [
+  ["paper.same", "同一论文 · {n} 篇文章", "Same paper · {n} articles", "同一論文 · {n} 篇文章", "同じ論文 · {n} 件の記事", "같은 논문 · 글 {n}개", "Mismo artículo científico · {n} textos", "Même publication · {n} articles", "Gleiche Publikation · {n} Artikel"],
   ["queue.personalOnly", "稍后读目前支持个人 RSS 文章。", "Read later currently supports personal RSS articles.", "稍後讀目前支援個人 RSS 文章。", "後で読むは個人の RSS 記事に対応しています。", "나중에 읽기는 개인 RSS 글을 지원합니다.", "Leer después admite artículos RSS personales.", "Lire plus tard prend en charge les articles RSS personnels.", "Später lesen unterstützt persönliche RSS-Artikel."],
   ["queue.title", "今日科研队列", "Research reading queue", "今日科研佇列", "研究リーディングキュー", "연구 읽기 대기열", "Cola de lectura científica", "File de lecture scientifique", "Forschungsleseliste"],
   ["queue.today", "今日精选", "Selected reading", "今日精選", "おすすめ記事", "추천 읽기", "Lecturas seleccionadas", "Lectures choisies", "Ausgewählte Artikel"],
