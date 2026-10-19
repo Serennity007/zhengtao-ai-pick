@@ -44,4 +44,14 @@ describe('online source catalogs', () => {
     expect(await searchPodcasts('https://rss.qiaomu.ai', 'Invest')).toEqual([{ slug: 'invest-like-the-best', name: 'Invest Like the Best' }]);
   });
 
+  it('prioritizes paper and research accounts in the unfiltered online directory', async () => {
+    const accounts = [
+      ['e531a18b21c34cf787b83ab444eef659d7a980de', '新智元'],
+      ['a'.repeat(40), '普通账号'],
+      ['0120e999fc95e098c74bd5482a2a4c8407c42c38', 'PaperWeekly'],
+    ].map(([id, name]) => ({ id, name, feedUrl: `https://wechat2rss.bestblogs.dev/feed/${id}.xml` }));
+    request.mockResolvedValue({ status: 200, text: JSON.stringify({ total: accounts.length, accounts }) } as never);
+    expect((await searchWechat('https://rss.qiaomu.ai', '')).feeds.map(feed => feed.name)).toEqual(['PaperWeekly', '新智元', '普通账号']);
+  });
+
 });

@@ -8,7 +8,7 @@
 | --- | --- |
 | 名称 | 正涛精选 |
 | 插件 ID | `zhengtao-ai-pick` |
-| 当前版本 | `1.3.1` |
+| 当前版本 | `1.4.0` |
 | 安装目录 | `<库>/.obsidian/plugins/zhengtao-ai-pick/` |
 | 新文章回链 | `obsidian://zhengtao-ai-pick` |
 
@@ -32,7 +32,7 @@ npm ci
 npm run check
 ```
 
-将 `main.js`、`manifest.json`、`styles.css` 安装到 `plugins/zhengtao-ai-pick/`。1.3.1 源码已同步本仓库，可自行构建；尚未发布远端 Release 或上架社区插件目录。
+将 `main.js`、`manifest.json`、`styles.css` 安装到 `plugins/zhengtao-ai-pick/`。1.4.0 增加 9 个国内公众号精选及去重批量添加入口，源码可自行构建；尚未发布远端 Release 或上架社区插件目录。
 
 迁移保留旧数据。回滚时关闭新插件，重新启用旧版；新版产生的数据不回写旧版。详细数据范围见 [整合说明](docs/INTEGRATION-1.3.0.md)。个人插件数据和备份只留在本地，不加入源码或发布包。
 

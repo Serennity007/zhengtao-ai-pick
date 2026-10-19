@@ -102,11 +102,11 @@ function obsidianClosed() {
 async function migrationTools(sourceRoot) {
   const compiled = await build({
     absWorkingDir: sourceRoot,
-    stdin: { contents: 'export { createIntegratedState } from "./src/legacy-import.ts"; export { initialState } from "./src/model.ts";', resolveDir: sourceRoot, sourcefile: 'install-migration-entry.ts', loader: 'ts' },
+    stdin: { contents: 'export { createFirstRunState } from "./src/first-run.ts"; export { initialState } from "./src/model.ts";', resolveDir: sourceRoot, sourcefile: 'install-migration-entry.ts', loader: 'ts' },
     bundle: true, format: 'cjs', platform: 'node', target: 'node20', write: false, logLevel: 'silent',
     plugins: [{ name: 'offline-obsidian-language', setup(builder) {
       builder.onResolve({ filter: /^obsidian$/ }, () => ({ path: 'obsidian', namespace: 'installer-mock' }));
-      builder.onLoad({ filter: /.*/, namespace: 'installer-mock' }, () => ({ contents: 'export function getLanguage() { return "zh"; }', loader: 'js' }));
+      builder.onLoad({ filter: /.*/, namespace: 'installer-mock' }, () => ({ contents: 'export function getLanguage() { return "zh"; } export function requestUrl() { throw new Error("Network disabled during offline installation"); }', loader: 'js' }));
     } }],
   });
   const module = { exports: {} };
@@ -192,7 +192,7 @@ async function main() {
   let state;
   try {
     const tools = await migrationTools(sourceRoot);
-    state = ownBytes ? tools.initialState(json(ownBytes, 'Independent plugin data')) : await tools.createIntegratedState(...previous);
+    state = ownBytes ? tools.initialState(json(ownBytes, 'Independent plugin data')) : await tools.createFirstRunState(...previous);
   } catch { stop('Could not prepare the reader state. Existing files were not changed and no data was printed.'); }
   console.log(JSON.stringify({ mode: options.apply ? 'apply' : 'preview', pluginId: PLUGIN_ID, version: manifest.version, existingDataPreserved: Boolean(ownBytes), predecessorDataFound: previous.map(value => value !== null), counts: counts(state), workspaceViewsToMigrate: [...workspaces.values()].reduce((total, item) => total + item.changes, 0), enabledPluginCount: enabled.length }, null, 2));
   if (!options.apply) { console.log('Preview complete. No files or directories were written.'); return; }

@@ -25,8 +25,10 @@ vi.mock('obsidian', async original => ({
 }));
 
 import ZhengtaoPicksPlugin from '../src/main';
-import { initialState, type State } from '../src/model';
+import { initialState, type Bundle, type State } from '../src/model';
 import { PLUGIN_ID, READER_VIEW_TYPE } from '../src/identity';
+import { domesticWechatSources, domesticWechatSourcesToAdd, findDomesticSubscription } from '../src/domestic-wechat';
+import { createIntegratedState } from '../src/legacy-import';
 
 beforeAll(() => {
   Object.defineProperty(window.crypto, 'subtle', { value: webcrypto.subtle, configurable: true });
@@ -47,6 +49,7 @@ function host(previous: unknown, predecessors: Record<string, unknown> = {}) {
     workspace: {
       on: vi.fn(() => ({})), onLayoutReady: vi.fn(), trigger: vi.fn(),
       getActiveViewOfType: vi.fn(() => null),
+      getLeavesOfType: vi.fn(() => []),
     },
   };
   const loadData = vi.fn(async () => ownData);
@@ -64,7 +67,9 @@ describe('plugin startup persistence', () => {
     const first = fixture.create();
     await first.onload();
     expect(fixture.saveData).toHaveBeenCalledOnce();
-    expect(fixture.saved().subscriptions).toHaveLength(24);
+    const baseline = await createIntegratedState({ readIds: ['read-before-integration'] }, { settings: { customFeeds: [{ feedUrl: 'https://lab.example/feed', name: 'Lab feed' }] } });
+    expect(fixture.saved().subscriptions).toHaveLength(baseline.subscriptions.length + domesticWechatSourcesToAdd(baseline.subscriptions).length);
+    expect(domesticWechatSources.every(source => findDomesticSubscription(fixture.saved().subscriptions, source.url))).toBe(true);
     expect(fixture.saved().readIds).toContain('read-before-integration');
     expect(fixture.adapter.read.mock.calls.map(([path]) => path)).toEqual([
       '.obsidian/plugins/qiaomu-ai-rss/data.json', '.obsidian/plugins/zhengtao-picks/data.json',
@@ -104,5 +109,68 @@ describe('plugin startup persistence', () => {
     expect(fixture.adapter.read).not.toHaveBeenCalled();
     expect(fixture.adapter.write).not.toHaveBeenCalled();
     expect(fixture.saveData).not.toHaveBeenCalled();
+  });
+
+  it('exposes an explicit domestic batch command without seeding an existing installation', async () => {
+    const fixture = host(initialState(null));
+    const plugin = fixture.create();
+    await plugin.onload();
+    expect(plugin.state.subscriptions).toHaveLength(0);
+    expect(plugin.addCommand.mock.calls.some(([command]) => command.id === 'add-domestic-wechat')).toBe(true);
+    const fetch = vi.spyOn(plugin.subscriptions, 'fetch');
+    expect(await plugin.addDomesticWechat()).toBe(domesticWechatSources.length);
+    expect(await plugin.addDomesticWechat()).toBe(0);
+    expect(plugin.state.subscriptions).toHaveLength(domesticWechatSources.length);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves existing account identities, aliases, content, personal groups and all 50 pinned groups', async () => {
+    const source = domesticWechatSources.find(item => item.aliases.length)!;
+    expect(source).toBeDefined();
+    const bundle: Bundle = { entry: { id: 'saved-article', sourceId: 'local:personal', title: 'Saved article', origin: 'local', content: '<p>Remembered</p>' }, rewrite: null, translation: null, fetchedAt: 10 };
+    const groups = Array.from({ length: 50 }, (_, order) => ({ id: `personal-${order}`, name: `Personal ${order}`, order }));
+    const own = initialState({
+      subscriptions: [{ id: 'local:personal', url: source.aliases[0], name: 'My account title', group: groups[0].name, entries: [bundle.entry] }],
+      subscriptionGroups: groups,
+      sourceMeta: { 'local:personal': { groupId: groups[0].id, name: 'My label', order: 0 } },
+      settings: { pinnedGroupIds: groups.map(group => group.id), lastSource: 'local:personal' },
+      readIds: ['saved-article'], cache: { 'saved-article': bundle }, favorites: { 'saved-article': bundle }, savedArticles: { 'saved-article': bundle },
+    });
+    const fixture = host(own), plugin = fixture.create();
+    await plugin.onload();
+    const original = structuredClone(plugin.state);
+    expect(await plugin.addDomesticWechat()).toBe(domesticWechatSources.length - 1);
+    expect(await plugin.addDomesticWechat()).toBe(0);
+    expect(findDomesticSubscription(plugin.state.subscriptions, source.url)).toEqual(original.subscriptions[0]);
+    expect(plugin.state.sourceMeta['local:personal']).toEqual(original.sourceMeta['local:personal']);
+    expect(plugin.state.settings).toEqual(original.settings);
+    expect(plugin.state.readIds).toEqual(original.readIds);
+    for (const key of ['cache', 'favorites', 'savedArticles'] as const) expect(plugin.state[key]).toEqual(original[key]);
+    expect(plugin.state.subscriptionGroups.slice(0, 50)).toEqual(original.subscriptionGroups);
+  });
+
+  it('does not recreate a deleted domestic source when a saved installation restarts', async () => {
+    const fixture = host(initialState(null)), first = fixture.create();
+    await first.onload(); await first.addDomesticWechat();
+    const source = domesticWechatSources[0], feed = findDomesticSubscription(first.state.subscriptions, source.url)!;
+    await first.subscriptions.remove(feed.id);
+    const persisted = structuredClone(fixture.saved());
+    const second = fixture.create(); await second.onload();
+    expect(second.state).toEqual(persisted);
+    expect(findDomesticSubscription(second.state.subscriptions, source.url)).toBeUndefined();
+    expect(fixture.adapter.read).not.toHaveBeenCalled();
+    expect(await second.addDomesticWechat()).toBe(1);
+  });
+
+  it('rolls back the domestic batch when persistence fails and allows a later retry', async () => {
+    const own = initialState({ readIds: ['personal-read'], settings: { fontSize: 25 } });
+    const fixture = host(own), plugin = fixture.create(); await plugin.onload();
+    const before = structuredClone(plugin.state);
+    fixture.saveData.mockRejectedValueOnce(new Error('Disk unavailable'));
+    await expect(plugin.addDomesticWechat()).rejects.toThrow('Disk unavailable');
+    expect(plugin.state).toEqual(before);
+    expect(await plugin.addDomesticWechat()).toBe(domesticWechatSources.length);
+    expect(plugin.state.readIds).toEqual(before.readIds);
+    expect(plugin.state.settings).toEqual(before.settings);
   });
 });

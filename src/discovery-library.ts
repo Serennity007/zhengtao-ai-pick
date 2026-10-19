@@ -3,6 +3,7 @@ import tidings from './data/tidings.json';
 import { discoveryFeeds, independentBlogs, podcastRecommendations, wechatFeeds } from './discovery';
 import { feedUrl } from './feeds';
 import { t } from './i18n';
+import { domesticWechatSources } from './domestic-wechat';
 export type DiscoverKind = 'wechat' | 'podcast' | 'blogs' | 'more';
 export interface DiscoverSource { id: string; name: string; url?: string; site?: string; image?: string; podcastId?: string; kind: DiscoverKind; description: string; group: string; language: string; provenance: string; recommended?: boolean; tags?: string[] }
 const feedSchema = z.object({ id: z.string(), title: z.string(), feed_url: z.string(), site_url: z.string().optional(), description: z.string().default(''), category: z.string(), kind: z.string(), language: z.string(), packs: z.array(z.string()), validated_at: z.string().optional() });
@@ -17,6 +18,7 @@ export type DiscoverCollection = 'wechat' | 'podcast' | 'blogs';
 export function inCollection(item: DiscoverSource, collection: DiscoverCollection) { return collection === 'blogs' ? item.kind === 'blogs' || item.kind === 'more' : item.kind === collection; }
 export function baseDiscovery(data = tidingsSnapshot): DiscoverSource[] {
   return dedupeDiscovery([
+    ...domesticWechatSources.map(source => ({ ...source, kind: 'wechat' as const, language: '中文', provenance: t('domestic.title'), recommended: true })),
     ...discoveryFeeds.map(f => ({ id: f.id, name: f.name, url: f.url, site: f.site, description: f.description, group: f.category, language: f.language, provenance: t('discovery.editorPick'), recommended: true, kind: 'blogs' as const })),
     ...wechatFeeds.map(f => ({ id: f.id, name: f.name, url: f.url, description: f.description, group: '微信公众号', language: '中文', provenance: t('discovery.editorPick'), recommended: true, kind: 'wechat' as const })),
     ...podcastRecommendations.map(f => ({ id: f.sourceId, podcastId: f.sourceId, name: f.name, description: `${f.nameZh} · ${f.description}`, group: '播客', language: '英文', provenance: t('discovery.editorPick'), recommended: true, kind: 'podcast' as const })),

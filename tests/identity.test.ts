@@ -5,6 +5,8 @@ import { firstRunState } from '../src/first-run';
 import { appendDailyNoteLink, articleNoteUrl, repairArticleLinks } from '../src/daily-note';
 import { PLUGIN_ID, READER_VIEW_TYPE } from '../src/identity';
 import type { Vault } from 'obsidian';
+import { domesticWechatSources, domesticWechatSourcesToAdd, findDomesticSubscription } from '../src/domestic-wechat';
+import { createIntegratedState } from '../src/legacy-import';
 
 beforeAll(() => { Object.defineProperty(window.crypto, 'subtle', { value: webcrypto.subtle, configurable: true }); });
 
@@ -36,9 +38,12 @@ describe('independent installation and one-time import', () => {
     expect(state.readIds).toContain('previously-read');
     expect(write).not.toHaveBeenCalled();
   });
-  it('seeds research feeds when predecessors are absent, and surfaces malformed data before saving', async () => {
+  it('seeds research and domestic WeChat feeds offline when predecessors are absent, and surfaces malformed data before saving', async () => {
     const absent = { configDir: '.obsidian', adapter: { exists: async () => false, read: vi.fn() } };
-    expect((await firstRunState(absent as unknown as Pick<Vault, 'configDir' | 'adapter'>)).subscriptions).toHaveLength(23);
+    const baseline = await createIntegratedState(null, null);
+    const state = await firstRunState(absent as unknown as Pick<Vault, 'configDir' | 'adapter'>);
+    expect(state.subscriptions).toHaveLength(baseline.subscriptions.length + domesticWechatSourcesToAdd(baseline.subscriptions).length);
+    expect(domesticWechatSources.every(source => findDomesticSubscription(state.subscriptions, source.url))).toBe(true);
     expect(absent.adapter.read).not.toHaveBeenCalled();
     const broken = { configDir: '.obsidian', adapter: { exists: async () => true, read: async () => '{broken' } };
     await expect(firstRunState(broken as unknown as Pick<Vault, 'configDir' | 'adapter'>)).rejects.toBeInstanceOf(SyntaxError);

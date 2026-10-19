@@ -1,12 +1,13 @@
 # 正涛精选 · Zhengtao AI Pick
 
-面向科研阅读的 Obsidian 插件，整合完整 RSS 阅读器与 23 个科研订阅源。当前整合版为 **1.3.1**，插件 ID 为 **`zhengtao-ai-pick`**，可与乔木插件分别安装。
+面向科研阅读的 Obsidian 插件，整合完整 RSS 阅读器、23 个科研订阅源与 9 个国内公众号精选。当前整合版为 **1.4.0**，插件 ID 为 **`zhengtao-ai-pick`**，可与乔木插件分别安装。
 
 本项目基于 [Qiaomu AI RSS](https://github.com/joeseesun/qiaomu-ai-rss)，原作者为向阳乔木（[@joeseesun](https://github.com/joeseesun)），沿用 **GPL-3.0-only**。独立化改动见 [FORK.md](FORK.md)。
 
 ## 功能
 
 - **科研订阅**：内置 arXiv cs.MA、LLM Agents、Agent Memory，以及 Zep、Lilian Weng、Simon Willison 等 23 个公开源。初装置顶「多智能体与 Agent 记忆」「Agent 研究与工程」两个分组。
+- **国内公众号精选**：PaperWeekly、AINLP、机器之心、AI 大模型应用实践、AI 科技评论、Datawhale、PaperAgent、夕小瑶科技说、新智元。首次安装加入「国内公众号精选」分组；已有用户可在探索页点击「添加国内精选」，或运行同名命令批量补充。已订阅账号保留原名称和分组，不重复添加已知旧地址。
 - **个人订阅管理**：添加 RSS / Atom、分组、重命名、取消订阅、OPML 导入与导出；分组可置顶为顶层频道，最多 50 个。
 - **完整阅读器**：双栏与专注阅读、频道切换、加载历史文章、搜索当前列表、未读与收藏筛选、阅读主题及字体设置。常规阅读器的各频道保存列表、阅读位置及筛选条件；实验室采集页不承诺恢复当前文章。
 - **收藏与归档**：保留收藏正文，选文摘录到今日日记或当前笔记，保存文章为库内笔记；桌面端支持 Markdown / PDF 导出。新生成的内部回链使用 `obsidian://zhengtao-ai-pick`。
@@ -17,7 +18,7 @@
 
 ## 安装
 
-需要 Obsidian **1.13.0 或更新版本**。当前整合版为 1.3.1，源码可从本仓库获取；尚未发布到 Releases 或 Obsidian 社区插件目录。
+需要 Obsidian **1.13.0 或更新版本**。当前整合版为 1.4.0，源码可从本仓库获取；尚未发布到 Releases 或 Obsidian 社区插件目录。
 
 已有本地安装包时，可直接使用其中构建好的三件套。也可以从仓库构建：
 
@@ -28,7 +29,7 @@ npm ci
 npm run build
 ```
 
-使用随附的 `zhengtao-ai-pick-1.3.1-source.zip` 时，在解压后的 `zhengtao-ai-pick` 目录运行 `npm ci` 和 `npm run build` 即可。
+使用随附的源码包时，在解压后的 `zhengtao-ai-pick` 目录运行 `npm ci` 和 `npm run build` 即可。
 
 1. 在库的配置目录下创建 `plugins/zhengtao-ai-pick/`，默认完整路径为 `<库>/.obsidian/plugins/zhengtao-ai-pick/`。
 2. 将构建目录的 **`main.js`、`manifest.json`、`styles.css`** 放入该目录。
@@ -49,6 +50,8 @@ npm run build
 点击频道名称切换分组，使用 **+** 添加订阅或进入探索页。搜索覆盖当前加载的列表；读取更早内容需要进入对应频道继续加载。来源只提供摘要时，可打开原文。
 
 个人订阅缓存的有效期为 **5 分钟**。进入频道时按过期情况获取内容，刷新按钮强制更新；自动批次最多刷新 **20 个源**，最多 **3 个并发请求**。插件不注册定时轮询。每个 RSS 最多保存 **50 篇**，最近打开的正文缓存最多 **40 篇**；收藏及摘录回链使用的文章快照单独保留。刷新失败会保留已有文章，源的可用性和全文长度由其提供方决定。
+
+国内精选使用公开的 BestBlogs 公众号 RSS，保留微信原文链接。精选指账号选择，文章仍按发布时间展示；较长正文可能受缓存上限截断，可打开原文继续阅读。账号清单、实测和数据处理方式见 [国内公众号精选](docs/DOMESTIC-WECHAT.md)。
 
 ## 隐私与服务
 

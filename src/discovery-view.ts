@@ -2,6 +2,7 @@ import { Component, Modal, Notice } from 'obsidian';
 import type QiaomuRssPlugin from './main';
 import { addSearchClear } from './search-clear';
 import { searchPodcasts, searchWechat } from './source-catalog';
+import { findDomesticSubscription } from './domestic-wechat';
 import { xiaoyuzhouPodcasts } from './discovery';
 import { baseDiscovery, dedupeDiscovery, searchDiscovery, tidingsSnapshot, tidingsSchema, tidingsSource, inCollection, type DiscoverCollection, type DiscoverSource, type TidingsData } from './discovery-library';
 import { collectionLabel, kindLabel, t } from './i18n';
@@ -31,7 +32,7 @@ class SourcePreview extends Modal {
     let groupChanged = false;
     const picker = groupSelect(footer, this.plugin, groupId, id => { groupId = id === '@default' ? '' : id; groupChanged = id !== '@default'; });
     if (!groupId && source.group) { picker.createEl('option', { value: '@default', text: source.group }); picker.value = '@default'; }
-    const existing = source.podcastId ? this.plugin.state.settings.followedPodcasts.includes(source.podcastId) ? source.podcastId : '' : this.plugin.state.subscriptions.find(f => f.url === source.url)?.id;
+    const existing = source.podcastId ? this.plugin.state.settings.followedPodcasts.includes(source.podcastId) ? source.podcastId : '' : findDomesticSubscription(this.plugin.state.subscriptions, source.url!)?.id;
     if (existing) picker.parentElement?.addClass('qrs-hidden');
     const actions = footer.createDiv('qrs-preview-actions');
     actions.createEl('button', { text: t('common.cancel') }).onclick = () => this.close();
@@ -105,6 +106,22 @@ export class DiscoveryPanel extends Component {
       const button = categories.createEl('button', { text: label, attr: { 'data-collection': kind, 'aria-pressed': 'false' } });
       button.onclick = () => { this.collection = kind; this.limit = 24; this.refresh(); this.scheduleSearch(); };
     }
+    const domestic = page.createDiv('qrs-discovery-actions');
+    domestic.createSpan({ text: t('domestic.description') });
+    const addDomestic = domestic.createEl('button', { text: t('domestic.add'), attr: { type: 'button' } });
+    const domesticStatus = domestic.createDiv({ attr: { role: 'status' } });
+    let domesticAdding = false;
+    addDomestic.onclick = () => {
+      if (domesticAdding) return;
+      domesticAdding = true; addDomestic.disabled = true; domesticStatus.setText('');
+      void this.plugin.addDomesticWechat().then(count => {
+        if (this.closed) return;
+        domesticStatus.setText(t('domestic.added', { n: count }));
+        new Notice(t('domestic.added', { n: count })); this.refresh();
+      }).catch(() => {
+        if (!this.closed) domesticStatus.setText(t('common.saveFailedRetry'));
+      }).finally(() => { domesticAdding = false; if (!this.closed) addDomestic.disabled = false; });
+    };
     this.status = page.createDiv({ cls: 'qrs-discovery-status', attr: { role: 'status' } });
     const section = page.createDiv('qrs-discovery-section'), titles = section.createDiv('qrs-discovery-titles');
     this.heading = titles.createEl('h2'); this.count = titles.createSpan('qrs-discovery-count');
@@ -169,7 +186,7 @@ export class DiscoveryPanel extends Component {
   }
   private subscribed(source: DiscoverSource) {
     if (source.podcastId) return this.plugin.state.settings.followedPodcasts.includes(source.podcastId) ? source.podcastId : '';
-    return this.plugin.state.subscriptions.find(f => f.url === source.url)?.id || '';
+    return findDomesticSubscription(this.plugin.state.subscriptions, source.url!)?.id || '';
   }
   private renderCard(source: DiscoverSource) {
     const card = this.cards.createEl('article', { cls: 'qrs-discovery-card', attr: { 'data-feed': source.id } });

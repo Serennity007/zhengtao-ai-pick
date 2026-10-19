@@ -1,6 +1,7 @@
 import { requestUrl } from 'obsidian';
 import { z } from 'zod';
 import { fail, t } from './i18n';
+import { domesticWechatSources } from './domestic-wechat';
 
 const wechatSchema = z.object({ total: z.number().int().nonnegative(), accounts: z.array(z.object({ id: z.string().regex(/^[a-f0-9]{40}$/), name: z.string(), feedUrl: z.string() })) });
 const podcastSearchSchema = z.object({ podcasts: z.array(z.object({ slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), name: z.string() })) });
@@ -21,7 +22,7 @@ const featuredWechatIds = [
   '1246d10fc107e600ae8897ec3dcb9be31cda79d7', // 葬AI
   'c68b58fb17ac7ae4b23c2af276cdd61c9eca1a48', // 36氪
 ];
-const featuredWechatRank = new Map(featuredWechatIds.map((id, index) => [`wechat-${id}`, index]));
+const featuredWechatRank = new Map([...new Set([...domesticWechatSources.map(source => source.id), ...featuredWechatIds.map(id => `wechat-${id}`)])].map((id, index) => [id, index]));
 
 async function catalogJson(url: string): Promise<unknown> {
   let timer: number | undefined;

@@ -1,5 +1,6 @@
 import { PLUGIN_ID, PLUGIN_NAME, PROJECT_URL } from './identity';
 import { firstRunState } from './first-run';
+import { DOMESTIC_WECHAT_GROUP, domesticWechatSourcesToAdd } from './domestic-wechat';
 import { CuratedSourcePicker } from './curated-source-picker';
 import { applyCuratedPicks } from './curated-sources';
 import { watchPaneDividers } from "./pane-dividers";
@@ -74,6 +75,13 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     const retire = () => { for (const type of RETIRED_VIEW_TYPES) for (const leaf of this.app.workspace.getLeavesOfType(type)) leaf.detach(); };
     this.app.workspace.onLayoutReady(() => { retire(); window.setTimeout(retire, 500); });
     this.addCommand({ id: 'explore-subscriptions', name: t('cmd.exploreSubscriptions'), callback: () => { void this.openDiscovery(); } });
+    this.addCommand({ id: 'add-domestic-wechat', name: t('domestic.command'), callback: () => {
+      void this.addDomesticWechat().then(async count => {
+        new Notice(t('domestic.added', { n: count }));
+        const group = this.state.subscriptionGroups.find(item => item.name === DOMESTIC_WECHAT_GROUP);
+        if (group) await this.openPersonalSource(`@group:${group.id}`);
+      }).catch(() => new Notice(t('common.saveFailedRetry')));
+    } });
     this.addCommand({ id: 'pick-qiaomu-sources', name: t('pick.title'), callback: () => this.pickCuratedSources() });
     this.addRibbonIcon('telescope', t('cmd.openReader'), () => { void this.openReader(); });
     this.addCommand({ id: 'open-reader', name: t('cmd.openReader'), callback: () => { void this.openReader(); } });
@@ -292,6 +300,9 @@ export default class ZhengtaoPicksPlugin extends Plugin {
     } catch { new Notice(t('notice.cannotOpenReader')); }
   }
   pickCuratedSources() { new CuratedSourcePicker(this).open(); }
+  async addDomesticWechat(): Promise<number> {
+    return this.subscriptions.import(domesticWechatSourcesToAdd(this.state.subscriptions));
+  }
   async saveCuratedSources(ids: string[] | null, sources = this.state.sources) {
     const previous = { ids: this.state.settings.pickedSourceIds, sources: this.state.sources, entries: this.state.entries,
       channels: structuredClone(this.state.channelStates), last: this.state.settings.lastSource };
