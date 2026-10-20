@@ -109,6 +109,12 @@ export async function parseFeed(xml: string, url: string, doc: Document): Promis
     const link = linkValue ? safeUrl(linkValue.trim(), linkNode ? baseUrl(linkNode, base) : base) : null;
     const contentNode = atom ? child(item, 'content') || child(item, 'summary') : child(item, 'encoded') || child(item, 'description');
     const raw = atom ? atomContent(contentNode) : contentNode?.textContent || '';
+    const empty = !raw.trim() || (atom && !['html', 'xhtml'].includes(contentNode?.getAttribute('type') || '') && !contentNode?.textContent?.trim());
+    const contentProvenance: NonNullable<Entry['contentProvenance']> = {
+      source: empty ? 'empty' : atom ? (contentNode?.localName === 'content' ? 'atom-content' : 'atom-summary')
+        : contentNode?.localName === 'encoded' ? 'rss-content' : 'rss-description',
+      truncated: raw.length > 100_000, originalLink: !!link,
+    };
     const title = plain(atom ? atomContent(child(item, 'title')) : text(item, 'title'), doc).slice(0, 300) || plain(raw, doc).slice(0, 80) || t('untitled.article');
     const published = (atom ? text(item, 'published') || text(item, 'updated') : text(item, 'pubDate') || text(item, 'date')) || '';
     const identity = (atom ? text(item, 'id') : text(item, 'guid')) || link || `${title}\n${published}`;
@@ -120,7 +126,7 @@ export async function parseFeed(xml: string, url: string, doc: Document): Promis
     const entry: Entry = { id, sourceId, origin: 'local', sourceName: name, title, link: link || url, image: entryImage(item, parsedContent.image, contentBase), audio: entryAudio(item, base),
       published, publishedTs: Number.isNaN(publishedTs) ? null : publishedTs,
       author: atom ? text(child(item, 'author') || root, 'name') : text(item, 'creator') || text(item, 'author'),
-      summary: plain(raw, doc).slice(0, 240), content: (parsedContent.html || t('reader.noFeedContent')) + (raw.length > 100_000 ? t('reader.truncatedContent') : '') };
+      summary: plain(raw, doc).slice(0, 240), content: (parsedContent.html || t('reader.noFeedContent')) + (raw.length > 100_000 ? t('reader.truncatedContent') : ''), contentProvenance };
     size += new TextEncoder().encode(JSON.stringify(entry)).byteLength;
     if (size > MAX_STORED_FEED) break;
     entries.push(entry);

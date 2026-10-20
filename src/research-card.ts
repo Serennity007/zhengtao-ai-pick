@@ -1,7 +1,8 @@
 import { markdownText } from './daily-note';
 import { t } from './i18n';
-import { safeUrl, titleOf, type Bundle, type Mode } from './model';
+import { titleOf, type Bundle, type Mode } from './model';
 import { extractPaperReferences } from './paper-groups';
+import { materialStatus, materialStatusText, sourceArticleUrl, paperReadingLinks } from './material-status';
 
 export interface ResearchCardOptions {
   sourceName: string;
@@ -12,7 +13,7 @@ export interface ResearchCardOptions {
 }
 
 /** JSON strings/arrays are YAML flow values; escape Unicode breaks to preserve their exact text. */
-function yamlValue(value: string | readonly string[]): string {
+function yamlValue(value: string | readonly string[] | boolean | null): string {
   return JSON.stringify(value).replace(/\u0085/g, '\\u0085').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
@@ -33,23 +34,28 @@ function readerBacklink(value: string): string | null {
 /** Creates a research worksheet from observed fields; conclusions remain explicitly unfilled. */
 export function researchCardMarkdown(bundle: Bundle, mode: Mode, readingMarkdown: string, options: ResearchCardOptions): string {
   const entry = bundle.entry, title = titleOf(entry);
-  const original = (entry.link ? safeUrl(entry.link) : null) || (entry.origin === 'vault' && entry.markdownPath && options.vaultName
+  const original = sourceArticleUrl(entry) || (entry.origin === 'vault' && entry.markdownPath && options.vaultName
     ? `obsidian://open?vault=${encodeURIComponent(options.vaultName)}&file=${encodeURIComponent(entry.markdownPath)}` : '');
   const paperEntry = entry.origin === 'vault' && entry.markdown != null ? { ...entry, content: withoutFrontmatter(entry.markdown) } : entry;
   const papers = extractPaperReferences(paperEntry);
-  const properties: Record<string, string | readonly string[]> = {
+  const scope = materialStatus(bundle, mode);
+  const properties: Record<string, string | readonly string[] | boolean | null> = {
     title, source: options.sourceName.trim() || entry.sourceName?.trim() || '', url: original,
     created: new Date(options.createdAt).toISOString(), published: entry.published?.trim() || '',
     arxiv: papers.filter(paper => paper.kind === 'arxiv').map(paper => paper.id),
     doi: papers.filter(paper => paper.kind === 'doi').map(paper => paper.id),
     status: 'to-review', topics: [...new Set(options.topics.map(topic => topic.trim()).filter(Boolean))], reading_mode: mode,
+    content_scope: scope.kind, content_truncated: mode === 'original' && entry.origin !== 'vault' && entry.contentProvenance ? scope.truncated : null,
   };
   const frontmatter = Object.entries(properties).map(([key, value]) => `${key}: ${yamlValue(value)}`).join('\n');
   const backlink = readerBacklink(options.backlink);
   const links = [backlink ? `[${t('card.backlink')}](<${backlink}>)` : '', original ? `[${t('export.originalLink')}](<${original}>)` : ''].filter(Boolean);
+  for (const link of paperReadingLinks(paperEntry)) {
+    if (link.url !== original) links.push(`[${t(link.kind === 'pdf' ? 'material.pdf' : 'material.paper')}](<${link.url}>)`);
+  }
   const sections = (['card.question', 'card.method', 'card.findings', 'card.limitations', 'card.implications'] as const)
     .map(key => `## ${t(key)}\n\n${t('card.placeholder')}`).join('\n\n');
   const material = entry.origin === 'vault' ? withoutFrontmatter(readingMarkdown) : readingMarkdown;
   return `---\n${frontmatter}\n---\n\n# ${markdownText(title.replace(/\s+/g, ' ').trim())}\n\n` +
-    `${links.length ? `${links.join(' · ')}\n\n` : ''}> ${t('card.scope')}\n\n${sections}\n\n## ${t('card.material')}\n\n${material.trimEnd()}\n`;
+    `${links.length ? `${links.join(' · ')}\n\n` : ''}> ${materialStatusText(bundle, mode)}\n> ${t('card.scope')}\n\n${sections}\n\n## ${t('card.material')}\n\n${material.trimEnd()}\n`;
 }

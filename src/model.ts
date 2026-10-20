@@ -18,6 +18,11 @@ export const translationSchema = z.object({
   titleZh: optionalText, summaryZh: optionalText,
   content: z.array(z.object({ source: optionalText, target: optionalText, sourceHtml: optionalText, targetHtml: optionalText })).nullish(),
 });
+export const contentProvenanceSchema = z.object({
+  source: z.enum(['rss-content', 'rss-description', 'atom-content', 'atom-summary', 'empty']),
+  truncated: z.boolean(), originalLink: z.boolean(),
+});
+export type ContentProvenance = z.infer<typeof contentProvenanceSchema>;
 export const entrySchema = z.object({
   id: z.string().min(1), sourceId: z.string(), origin: z.enum(['local', 'qiaomu', 'vault']).optional(), sourceName: optionalText, title: z.string(), titleZh: optionalText,
   markdownPath: optionalText, markdown: optionalText, podcastSlug: optionalText, episodeSlug: optionalText,
@@ -25,6 +30,7 @@ export const entrySchema = z.object({
   publishedRelative: optionalText, podcastViews: z.number().int().nonnegative().nullish(),
   podcastWordCount: z.number().int().nonnegative().nullish(), podcastDurationSeconds: z.number().int().nonnegative().nullish(),
   summary: optionalText, summaryZh: optionalText, content: optionalText, image: optionalText,
+  contentProvenance: contentProvenanceSchema.optional().catch(undefined),
   audio: z.object({ url: z.string(), type: optionalText }).nullish(),
   rewrite: rewriteSchema.nullish(),
 });

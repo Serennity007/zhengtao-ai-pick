@@ -18,6 +18,30 @@ function metadata(markdown: string): Record<string, unknown> {
 }
 
 describe('research reading cards', () => {
+  it('records source range and known truncation, while old snapshots keep truncation unknown', () => {
+    const article = bundle({ origin: 'local', content: '<p>Available summary</p>',
+      contentProvenance: { source: 'atom-summary', truncated: true, originalLink: true }, link: 'https://arxiv.org/abs/2601.12345' });
+    const card = researchCardMarkdown(article, 'original', 'Saved material.', options);
+    expect(metadata(card)).toMatchObject({ content_scope: 'feed-summary', content_truncated: true });
+    expect(card).toContain(t('material.feed-summary'));
+    expect(card).toContain(t('material.truncated'));
+    expect(card).toContain(`[${t('material.pdf')}](<https://arxiv.org/pdf/2601.12345>)`);
+    const old = { ...article, entry: { ...article.entry, contentProvenance: undefined } };
+    expect(metadata(researchCardMarkdown(old, 'original', 'Saved material.', options)))
+      .toMatchObject({ content_scope: 'unknown', content_truncated: null });
+    article.rewrite = { body: 'Existing rewrite.' };
+    const rewrite = researchCardMarkdown(article, 'rewrite', 'Existing rewrite.', options);
+    expect(metadata(rewrite)).toMatchObject({ content_scope: 'rewrite', content_truncated: null });
+    expect(rewrite).not.toContain(t('material.truncated'));
+  });
+
+  it('does not label the feed URL fallback as an original article URL', () => {
+    const card = researchCardMarkdown(bundle({ origin: 'local', link: 'https://example.org/feed', content: '<p>Body</p>',
+      contentProvenance: { source: 'rss-content', truncated: false, originalLink: false } }), 'original', 'Body', options);
+    expect(metadata(card)).toMatchObject({ url: '', content_scope: 'feed-content', content_truncated: false });
+    expect(card).not.toContain('https://example.org/feed');
+  });
+
   it('round-trips real metadata through YAML with quotes, Unicode line separators and newlines', () => {
     const title = '问题: "Agent"\n第二行 [结果] #tag\u0085\u2028\u2029';
     const sourceName = '研究: "实验室"\n公众号';
@@ -26,7 +50,7 @@ describe('research reading cards', () => {
 
     expect(metadata(card)).toEqual({
       title, source: sourceName, url: 'https://example.org/paper?x=1&y=2', created: '2026-10-19T00:00:00.000Z', published: '2026-10-18 09:30',
-      arxiv: [], doi: [], status: 'to-review', topics, reading_mode: 'original',
+      arxiv: [], doi: [], status: 'to-review', topics, reading_mode: 'original', content_scope: 'empty', content_truncated: null,
     });
     expect(card).toContain(`[${t('card.backlink')}](<${options.backlink}>)`);
     expect(card).toContain(`[${t('export.originalLink')}](<https://example.org/paper?x=1&y=2>)`);

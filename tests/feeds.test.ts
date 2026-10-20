@@ -139,6 +139,81 @@ describe('OPML and migration', () => {
     expect(state.subscriptions).toEqual([]); expect(state.readIds).toEqual(['existing']); expect(state.settings.remoteImages).toBe(false);
   });
 });
+describe('feed content provenance', () => {
+  const rssItem = (body: string, link = '<link>https://example.com/post</link>') => `<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Feed</title><item><guid>one</guid><title>Article</title>${link}${body}</item></channel></rss>`;
+  const atomItem = (body: string) => `<feed xmlns="http://www.w3.org/2005/Atom"><title>Feed</title><entry><id>one</id><title>Article</title><link href="https://example.com/post"/>${body}</entry></feed>`;
+
+  it.each([
+    ['rss-content', rssItem('<description>Summary</description><content:encoded><![CDATA[<p>Body</p>]]></content:encoded>')],
+    ['rss-description', rssItem('<description>Summary</description>')],
+    ['atom-content', atomItem('<summary>Summary</summary><content type="html">&lt;p&gt;Body&lt;/p&gt;</content>')],
+    ['atom-summary', atomItem('<summary>Summary</summary>')],
+  ])('records the selected %s field without claiming it is a full article', async (source, xml) => {
+    const { entries } = await parseFeed(xml, 'https://example.com/feed', document);
+    expect(entries[0].contentProvenance).toEqual({ source, truncated: false, originalLink: true });
+  });
+
+  it.each([
+    rssItem(''), rssItem('<description> \n </description>'),
+    atomItem(''), atomItem('<content type="html"> \n </content>'),
+  ])('records an absent or blank feed body as empty', async xml => {
+    const { entries } = await parseFeed(xml, 'https://example.com/feed', document);
+    expect(entries[0].contentProvenance).toEqual({ source: 'empty', truncated: false, originalLink: true });
+  });
+
+  it.each([100_000, 100_001])('records truncation only above the raw %i-character boundary', async length => {
+    const { entries } = await parseFeed(rssItem(`<content:encoded>${'x'.repeat(length)}</content:encoded>`), 'https://example.com/feed', document);
+    expect(entries[0].contentProvenance).toEqual({ source: 'rss-content', truncated: length > 100_000, originalLink: true });
+    expect(entries[0].content?.startsWith('x'.repeat(100_000))).toBe(true);
+    expect(entries[0].content?.includes('正文较长')).toBe(length > 100_000);
+  });
+
+  it.each([
+    ['<summary>   </summary>', '<p>   </p>'],
+    ['<content/>', '<p></p>'],
+  ])('recognizes an empty Atom text field before its paragraph wrapper: %s', async (body, html) => {
+    const { entries } = await parseFeed(atomItem(body), 'https://example.com/feed', document);
+    expect(entries[0].contentProvenance).toEqual({ source: 'empty', truncated: false, originalLink: true });
+    expect(entries[0].content).toBe(html);
+  });
+
+  it.each(['', '<link>javascript:alert(1)</link>'])('distinguishes a missing safe article link from the existing feed URL fallback', async link => {
+    const { entries } = await parseFeed(rssItem('<description>Summary</description>', link), 'https://example.com/feed', document);
+    expect(entries[0].link).toBe('https://example.com/feed');
+    expect(entries[0].contentProvenance?.originalLink).toBe(false);
+  });
+
+  it('keeps the original article identity when the body source and provenance change', async () => {
+    const content = await parseFeed(rssItem('<content:encoded>Body</content:encoded>'), 'https://example.com/feed', document);
+    const summary = await parseFeed(rssItem('<description>Changed summary</description>'), 'https://example.com/feed', document);
+    expect(content.entries[0].contentProvenance?.source).toBe('rss-content');
+    expect(summary.entries[0].contentProvenance?.source).toBe('rss-description');
+    expect(content.entries[0].id).toBe(summary.entries[0].id);
+  });
+
+  it('preserves provenance in persisted entries, subscriptions and saved reader snapshots', async () => {
+    const { entries } = await parseFeed(rssItem('<description>Summary</description>'), 'https://example.com/feed', document);
+    const bundle: Bundle = { entry: entries[0], rewrite: null, translation: null, fetchedAt: 1 };
+    const state = initialState({ entries, subscriptions: [{ id: 'feed', url: 'https://example.com/feed', name: 'Feed', entries }],
+      cache: { one: bundle }, favorites: { one: bundle }, savedArticles: { 'local|one': bundle }, readLater: { 'local|one': { bundle, savedAt: 2 } } });
+    const restored = initialState(JSON.parse(JSON.stringify(state)));
+    const copies = [restored.entries[0], restored.subscriptions[0].entries[0], restored.cache.one.entry, restored.favorites.one.entry,
+      restored.savedArticles['local|one'].entry, restored.readLater['local|one'].bundle.entry];
+    for (const entry of copies) expect(entry.contentProvenance).toEqual({ source: 'rss-description', truncated: false, originalLink: true });
+  });
+
+  it.each([undefined, null, 'invalid', {}, { source: 'full', truncated: false, originalLink: true },
+    { source: 'atom-summary', truncated: 'false', originalLink: true }, { source: 'atom-summary', truncated: false }])(
+    'loads legacy entries and discards malformed provenance without losing the snapshot', contentProvenance => {
+      const entry = { id: 'legacy', sourceId: 'source', title: 'Original article', content: '<p>Preserved body</p>', contentProvenance };
+      const bundle = { entry, rewrite: null, translation: null, fetchedAt: 1 };
+      const state = initialState({ entries: [entry], savedArticles: { legacy: bundle } });
+      expect(state.entries[0].content).toBe('<p>Preserved body</p>');
+      expect(state.entries[0].contentProvenance).toBeUndefined();
+      expect(state.savedArticles.legacy.entry).toEqual(state.entries[0]);
+    });
+});
+
 describe('local subscription lifecycle', () => {
   it('adds, rejects duplicates, edits groups and refreshes without duplicating articles', async () => {
     const state = initialState(null), persist = vi.fn(async () => {}), transport = vi.fn(async () => ({ status: 200, text: rss() }));

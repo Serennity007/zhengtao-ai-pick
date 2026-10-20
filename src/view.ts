@@ -28,6 +28,8 @@ import { agentAvailable, articleSnapshot, askAgent } from './agent-bridge';
 import { notifyContextChanged, type ContextSnapshot } from './qiaomu-context';
 import { groupPaperEntries } from './paper-groups';
 import { parseQueueKeywords } from './research-queue';
+import { renderMaterialInfo } from './material-info';
+import { sourceArticleUrl } from './material-status';
 import type { ResearchCardOptions } from './research-card';
 import { fontName } from './fonts';
 export const VIEW_TYPE = READER_VIEW_TYPE;
@@ -953,7 +955,7 @@ export class ReaderView extends ItemView {
     noteButton.setAttribute('aria-pressed', String(!!savedNote));
     this.addIconButton(actions, 'notebook-pen', t('reader.noteToDaily'), () => this.noteCurrent());
     const more = this.addIconButton(actions, 'ellipsis', t('reader.moreActions'), () => {
-      const menu = new Menu().setUseNativeMenu(false); const link = safeUrl(bundle.entry.link || '');
+      const menu = new Menu().setUseNativeMenu(false); const link = sourceArticleUrl(bundle.entry);
       menu.addItem(item => item.setTitle(t('reader.readingSettingsMenu')).setIcon('type').onClick(() => { this.appearanceOpen = true; this.renderReader(true); }));
       menu.addSeparator();
       if (bundle.entry.origin === 'vault' && bundle.entry.markdownPath) menu.addItem(item => item.setTitle(t('reader.openSourceFile')).setIcon('file-text').onClick(() => {
@@ -998,7 +1000,7 @@ export class ReaderView extends ItemView {
     if (previous) { this.reader.append(previous); this.reader.scrollTop = scroll; this.restoreOffsets(); return; }
     const article = this.reader.createEl('article', { cls: 'qrs-article' });
     const title = article.createEl('h1');
-    const originalUrl = safeUrl(bundle.entry.link || '');
+    const originalUrl = sourceArticleUrl(bundle.entry);
     if (bundle.entry.origin === 'vault' && bundle.entry.markdownPath) {
       const link = title.createEl('a', { text: titleOf(bundle.entry), href: '#', cls: 'qrs-title-link' });
       link.onclick = event => { event.preventDefault(); void this.app.workspace.openLinkText(bundle.entry.markdownPath!, '', true); };
@@ -1018,13 +1020,7 @@ export class ReaderView extends ItemView {
         episode.podcastWordCount ? t('reader.words', { n: episode.podcastWordCount.toLocaleString() }) : ''].filter(Boolean);
       if (facts.length) article.createDiv({ cls: 'qrs-podcast-meta', text: facts.join(' · ') });
     }
-    const original = safeUrl(bundle.entry.link || '');
-    if (original && wechatArticleKey(original)) {
-      title.addClass('qrs-wechat-title');
-      const notice = article.createDiv('qrs-wechat-source');
-      notice.createSpan({ text: t('reader.wechatNotice') });
-      notice.createEl('a', { text: t('reader.wechatOriginal'), href: original, attr: { target: '_blank', rel: 'noopener noreferrer' } });
-    }
+    renderMaterialInfo(article, bundle, this.mode, this.articleLoading);
     if (this.message) article.createDiv({ cls: 'qrs-feedback', text: this.message, attr: { role: 'status' } });
     if (!this.articleLoading) renderMedia(article, bundle.entry);
     try {

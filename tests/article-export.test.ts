@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { marked } from 'marked';
 import { articleExportBody, articleExportMarkdown } from '../src/article-export';
 import type { Bundle } from '../src/model';
+import { t } from '../src/i18n';
 
 const bundle: Bundle = {
   entry: {
@@ -15,6 +16,19 @@ const bundle: Bundle = {
 };
 
 describe('article Markdown export', () => {
+  it('keeps content scope in new exports without calling the feed fallback an original article', () => {
+    const item: Bundle = { ...bundle, entry: { ...bundle.entry, origin: 'local', link: 'https://example.org/feed',
+      contentProvenance: { source: 'rss-description', truncated: true, originalLink: false } } };
+    const markdown = articleExportMarkdown(item, 'original', articleExportBody(item, 'original', document, false))!;
+    expect(markdown).toContain(t('material.feed-description'));
+    expect(markdown).toContain(t('material.truncated'));
+    expect(markdown).not.toContain('https://example.org/feed');
+    expect(markdown).toContain('重要结论');
+    const rewritten = articleExportMarkdown(item, 'rewrite', articleExportBody(item, 'rewrite', document, false))!;
+    expect(rewritten).toContain(t('material.rewrite'));
+    expect(rewritten).not.toContain(t('material.truncated'));
+  });
+
   it('preserves displayed structure, safe links, image references and Chinese-adjacent emphasis', () => {
     const body = articleExportBody(bundle, 'original', document, true);
     const markdown = articleExportMarkdown(bundle, 'original', body)!;

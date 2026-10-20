@@ -1,6 +1,6 @@
 {
   "name": "zhengtao-ai-pick",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Independent research RSS reader integrating Zhengtao research feeds and the Qiaomu AI RSS reading engine",
   "license": "GPL-3.0-only",
   "private": true,

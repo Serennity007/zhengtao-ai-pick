@@ -1,8 +1,9 @@
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { articleFragment } from './content';
-import { modeLabel, safeUrl, titleOf, type Bundle, type Mode } from './model';
+import { modeLabel, titleOf, type Bundle, type Mode } from './model';
 import { t } from './i18n';
+import { materialStatusText, sourceArticleUrl } from './material-status';
 
 function escapeMarkdown(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').replace(/([\\`*_{}[\]()#+.!|>])/g, '\\$1').trim();
@@ -43,7 +44,8 @@ export function articleExportMarkdown(bundle: Bundle, mode: Mode, body: HTMLElem
   const title = escapeMarkdown(titleOf(entry)).replace(/\\([#+.!|>()])/g, '$1');
   const facts = [entry.sourceName?.trim(), entry.author?.trim(), entry.published?.trim().slice(0, 10), modeLabel(mode)].filter(Boolean);
   const header = [`# ${title}`, facts.length ? `> ${facts.map(value => escapeMarkdown(value!)).join(' · ')}` : ''];
-  const source = entry.link ? safeUrl(entry.link) : null;
+  header.push(`> ${materialStatusText(bundle, mode)}`);
+  const source = sourceArticleUrl(entry);
   if (source) header.push(`> [${t('export.originalLink')}](<${source}>)`);
   return `${header.filter(Boolean).join('\n\n')}\n\n${content}\n`;
 }

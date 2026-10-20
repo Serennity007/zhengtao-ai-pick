@@ -8,7 +8,7 @@
 | --- | --- |
 | 名称 | 正涛精选 |
 | 插件 ID | `zhengtao-ai-pick` |
-| 当前版本 | `1.7.0` |
+| 当前版本 | `1.8.0` |
 | 安装目录 | `<库>/.obsidian/plugins/zhengtao-ai-pick/` |
 | 新文章回链 | `obsidian://zhengtao-ai-pick` |
 
@@ -34,7 +34,7 @@ npm run check
 
 将 `main.js`、`manifest.json`、`styles.css` 安装到 `plugins/zhengtao-ai-pick/`。1.4.0 增加 9 个国内公众号精选及去重批量添加入口，源码可自行构建；尚未发布远端 Release 或上架社区插件目录。
 
-1.5.0 至 1.7.0 依次加入专题阅读队列与稍后读、明确 arXiv／DOI 的同论文聚合、带本地快照回链的科研阅读卡片。旧状态自动补齐新字段，不重种订阅；卡片的科研结论栏目由读者填写。详见 [科研阅读流程](docs/RESEARCH-WORKFLOW.md)。
+1.5.0 至 1.7.0 依次加入专题阅读队列与稍后读、明确 arXiv／DOI 的同论文聚合、带本地快照回链的科研阅读卡片。1.8.0 增加阅读材料范围与明确论文／arXiv PDF 入口。旧状态自动补齐新字段，不重种订阅；卡片的科研结论栏目由读者填写。详见 [科研阅读流程](docs/RESEARCH-WORKFLOW.md)。
 
 迁移保留旧数据。回滚时关闭新插件，重新启用旧版；新版产生的数据不回写旧版。详细数据范围见 [整合说明](docs/INTEGRATION-1.3.0.md)。个人插件数据和备份只留在本地，不加入源码或发布包。
 

@@ -103,9 +103,13 @@
 .qrs-article h1.qrs-bilingual-title { margin-bottom:8px; }
 .qrs-article-original-title { color:var(--text-muted); font-size:14px; line-height:1.5; margin-bottom:24px; overflow-wrap:anywhere; }
 .qrs-article .qrs-podcast-meta { margin:-16px 0 24px; color:var(--text-muted); font-size:12px; line-height:1.6; }
-.qrs-article .qrs-wechat-title { margin-bottom:8px; }
-.qrs-wechat-source { display:flex; flex-wrap:wrap; gap:4px 12px; margin:0 0 26px; color:var(--text-faint); font-size:11px; line-height:1.6; }
-.qrs-wechat-source a { color:var(--text-muted); text-decoration:underline; text-underline-offset:2px; }
+.qrs-material-info { margin:-12px 0 26px; padding:10px 14px; border-left:3px solid var(--interactive-accent); background:var(--background-secondary); border-radius:0 6px 6px 0; font-size:12px; line-height:1.7; color:var(--text-muted); overflow-wrap:anywhere; }
+.qrs-material-label { display:block; font-weight:600; color:var(--text-normal); }
+.qrs-material-scope { display:block; }
+.qrs-material-links { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:4px; }
+.qrs-material-links a { color:var(--text-accent); text-decoration:underline; text-underline-offset:2px; }
+.qrs-material-links a:focus-visible { outline:2px solid var(--interactive-accent); outline-offset:3px; border-radius:2px; }
+.qrs-material-copyright { display:block; margin-top:4px; font-size:11px; color:var(--text-faint); }
 .qrs-media { margin:0 0 26px; padding:16px; border:1px solid var(--background-modifier-border); border-radius:12px; background:var(--background-secondary); }
 .qrs-media strong { display:block; margin-bottom:10px; font-size:14px; }
 .qrs-media p { margin:10px 0 0; color:var(--text-muted); font-size:13px; line-height:1.5; }
